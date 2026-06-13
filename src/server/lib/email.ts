@@ -3,11 +3,15 @@ export function encodeRawEmail(opts: {
   subject: string;
   body: string;
   from?: string;
+  inReplyTo?: string;
+  references?: string;
 }): string {
   const lines = [
     ...(opts.from ? [`From: ${opts.from}`] : []),
     `To: ${opts.to}`,
     `Subject: ${opts.subject}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
     "Content-Type: text/plain; charset=utf-8",
     "MIME-Version: 1.0",
     "",

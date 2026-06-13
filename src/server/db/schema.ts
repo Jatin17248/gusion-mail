@@ -39,3 +39,5 @@ export const corsairEvents = pgTable('corsair_events', {
     payload: jsonb('payload').notNull().default({}),
     status: text('status'),
 });
+
+export * from "./app-schema";

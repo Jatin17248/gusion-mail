@@ -1,6 +1,6 @@
 import { corsair } from "@/server/corsair";
 
-export function getTenant() {
-  const tenantId = process.env.TENANT_ID ?? "dev";
+export function getTenant(corsairTenantId?: string | null) {
+  const tenantId = corsairTenantId ?? "dev";
   return corsair.withTenant(tenantId);
 }

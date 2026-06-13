@@ -1,40 +1,28 @@
 "use client";
 
-import { useState } from "react";
-
-import { CalendarPanel } from "@/app/_components/calendar-panel";
-import { GmailPanel } from "@/app/_components/gmail-panel";
+import { useSession } from "next-auth/react";
+import { Landing } from "@/app/_components/landing";
+import { Onboarding } from "@/app/_components/onboarding";
+import { Dashboard } from "@/app/_components/dashboard";
 
 export default function Home() {
-  const [tab, setTab] = useState<"gmail" | "calendar">("gmail");
+  const { data: session, status } = useSession();
 
-  return (
-    <main>
-      <h1>Google Demo</h1>
-      <p className="muted">Gmail and Calendar powered by Corsair</p>
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-      <p>
-        {tab === "gmail" ? (
-          <>
-            <strong>Email</strong> ·{" "}
-            <button type="button" className="link" onClick={() => setTab("calendar")}>
-              Calendar
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="link" onClick={() => setTab("gmail")}>
-              Email
-            </button>
-            {" · "}
-            <strong>Calendar</strong>
-          </>
-        )}
-      </p>
+  if (!session) {
+    return <Landing />;
+  }
 
-      <hr />
+  if (!session.user.gmailConnected || !session.user.calendarConnected) {
+    return <Onboarding />;
+  }
 
-      {tab === "gmail" ? <GmailPanel /> : <CalendarPanel />}
-    </main>
-  );
+  return <Dashboard />;
 }
