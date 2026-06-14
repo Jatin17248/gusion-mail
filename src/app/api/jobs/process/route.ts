@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { emailMeta, sendQueue, followUps, users } from "@/server/db/schema";
-import { and, eq, lte } from "drizzle-orm";
+import {
+  emailMeta,
+  sendQueue,
+  followUps,
+  users,
+  bulkCampaigns,
+  bulkRecipients,
+  suppressionList,
+} from "@/server/db/schema";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { getTenant } from "@/server/lib/tenant";
 import { appEventEmitter } from "@/server/lib/event-emitter";
+import { encodeRawEmail } from "@/server/lib/email";
 
 export const dynamic = "force-dynamic";
+
+function personalize(text: string, variables: Record<string, string>): string {
+  let result = text;
+  for (const [key, val] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`{{\\s*${key}\\s*}}`, "g"), val);
+  }
+  return result;
+}
 
 export async function GET() {
   return await processJobs();
@@ -24,6 +41,9 @@ async function processJobs() {
       emailsFailed: 0,
       followUpsReminded: 0,
       followUpsDismissed: 0,
+      campaignsSent: 0,
+      campaignsFailed: 0,
+      campaignsCompleted: 0,
     };
 
     // 1. Process Snooze Releases
@@ -181,6 +201,114 @@ async function processJobs() {
           .set({ status: "dismissed" })
           .where(eq(followUps.id, followUp.id));
         results.followUpsDismissed++;
+      }
+    }
+
+    // 4. Process Running Bulk Campaigns
+    const runningCampaigns = await db.query.bulkCampaigns.findMany({
+      where: eq(bulkCampaigns.status, "running"),
+    });
+
+    for (const campaign of runningCampaigns) {
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, campaign.userId),
+      });
+
+      if (!user?.corsairTenantId) {
+        await db
+          .update(bulkCampaigns)
+          .set({ status: "failed" })
+          .where(eq(bulkCampaigns.id, campaign.id));
+        continue;
+      }
+
+      const pendingRecipients = await db.query.bulkRecipients.findMany({
+        where: and(
+          eq(bulkRecipients.campaignId, campaign.id),
+          eq(bulkRecipients.status, "pending")
+        ),
+        limit: 5,
+      });
+
+      if (pendingRecipients.length === 0) {
+        await db
+          .update(bulkCampaigns)
+          .set({ status: "completed" })
+          .where(eq(bulkCampaigns.id, campaign.id));
+
+        results.campaignsCompleted++;
+
+        appEventEmitter.emit(`update:${campaign.userId}`, {
+          type: "inbox_update",
+          message: `Bulk Campaign "${campaign.name}" completed successfully.`,
+        });
+        continue;
+      }
+
+      const tenant = getTenant(user.corsairTenantId);
+
+      for (const recipient of pendingRecipients) {
+        const suppressed = await db.query.suppressionList.findFirst({
+          where: and(
+            eq(suppressionList.orgId, campaign.orgId),
+            eq(suppressionList.email, recipient.email.toLowerCase().trim())
+          ),
+        });
+
+        if (suppressed) {
+          await db
+            .update(bulkRecipients)
+            .set({ status: "unsubscribed" })
+            .where(eq(bulkRecipients.id, recipient.id));
+          continue;
+        }
+
+        let vars = {};
+        try {
+          vars = JSON.parse(recipient.variables);
+        } catch (e) {
+          vars = {};
+        }
+
+        const personalizedSubject = personalize(campaign.subject, vars);
+        let personalizedBody = personalize(campaign.body, vars);
+        const unsubLink = `https://mail.gusion.in/unsubscribe?orgId=${campaign.orgId}&email=${encodeURIComponent(recipient.email)}`;
+        personalizedBody += `\n\n--\nTo unsubscribe from these emails, click here: ${unsubLink}`;
+
+        try {
+          const raw = encodeRawEmail({
+            to: recipient.email,
+            subject: personalizedSubject,
+            body: personalizedBody,
+          });
+
+          await tenant.gmail.api.messages.send({ raw });
+
+          await db
+            .update(bulkRecipients)
+            .set({ status: "sent", sentAt: new Date() })
+            .where(eq(bulkRecipients.id, recipient.id));
+
+          await db
+            .update(bulkCampaigns)
+            .set({ sentCount: sql`bulk_campaigns.sent_count + 1` })
+            .where(eq(bulkCampaigns.id, campaign.id));
+
+          results.campaignsSent++;
+        } catch (err: any) {
+          console.error(`Failed to send campaign email to ${recipient.email}:`, err);
+          await db
+            .update(bulkRecipients)
+            .set({ status: "failed", error: err.message || "Failed send" })
+            .where(eq(bulkRecipients.id, recipient.id));
+
+          await db
+            .update(bulkCampaigns)
+            .set({ failedCount: sql`bulk_campaigns.failed_count + 1` })
+            .where(eq(bulkCampaigns.id, campaign.id));
+
+          results.campaignsFailed++;
+        }
       }
     }
 

@@ -4,10 +4,10 @@
 > **This is the single source of truth** for building Gusion Mail from a fresh repo to a public, paid product people love and tell their friends about.
 
 - **Owner:** Jatin Sood
-- **Last updated:** 2026-06-13
-- **Status:** Planning → ready to execute (brand-new repo; `.git` removed, will re-init)
-- **Positioning:** Prosumer-first (Superhuman-grade speed) + AI-native (deeper than Superhuman) + a built-in viral loop (public scheduling links). Team plan is expansion revenue, not the wedge.
-- **Stack (locked):** Next.js 15 (App Router, React 19) · tRPC v11 · TailwindCSS v4 · Framer Motion · Drizzle ORM · Neon (Serverless Postgres) · Upstash Redis + QStash · Corsair (`gmail`, `googlecalendar`) · Google Gemini · Stripe · Vercel
+- **Last updated:** 2026-06-14
+- **Status:** Building. Backend ~Phases 0–6 done (`tsc` clean, 36/36 tests). Pivoting to add an **Organization/Team layer + helpdesk tickets + automation engine + public API + bulk mail-merge** (decided 2026-06-14). Next: surface trapped features (Sprints S1–S3), then org foundation (P11).
+- **Positioning (two-layer).** **Wedge:** prosumer Superhuman-grade speed + AI-native (individual Pro). **Expansion:** team shared-inbox + support tickets + automation engine + developer API/webhooks + bulk mail-merge (seat-based Team + Platform add-on). **Org is now the billing/data boundary** (a solo user = 1-person org).
+- **Stack (locked):** Next.js 15 (App Router, React 19) · tRPC v11 · TailwindCSS v4 · Framer Motion · Drizzle ORM · Neon (Serverless Postgres) · Upstash Redis + **QStash (default queue; BullMQ worker optional for bulk send)** · Corsair (`gmail`, `googlecalendar`) · Google Gemini · Stripe · Vercel
 
 ---
 
@@ -149,35 +149,58 @@ The product surface, grouped by theme. Each feature is tagged:
 
 **Flagship demo trio (what every screenshot/video leads with):** ★★ **Agent Chat**, ★★ **Scheduling Links**, and ★ **Catch-me-up Daily Brief** — because they're memorable, screenshot-able, and uniquely "AI command center."
 
+### 2.10 Platform: Teams, Helpdesk, Automation & API (org pivot — added 2026-06-14)
+| Feature | Tier | Plan | Notes |
+|---|---|---|---|
+| **Organizations / workspaces** (solo user = 1-person org) | V1 | All | New billing + data boundary; gate for everything below |
+| **Team members + roles** (owner/admin/agent), email invites | V1 | Team | Per-seat billing |
+| **Shared inbox** (connect `support@`, org-owned Corsair tenant) ★ | V1 | Team | Multiple agents triage one mailbox |
+| **Support tickets / IDs** (`[GSN-####]` in subject, threaded, trackable) ★★ | V1 | Team | Queue, status, assignment, internal notes |
+| **Automation engine** (trigger → condition → action: auto-reply, assign, label, webhook) ★★ | V1 | Team | Evaluated off the webhook via QStash; rule builder + run log |
+| **Public API** (`/api/v1/*`, API keys + scopes + rate limits) ★ | V1 | Platform | Users integrate their own apps |
+| **Outbound webhooks** (signed: `email.received`, `ticket.created/updated`) | V1 | Platform | Event push to user systems |
+| **API docs site** (OpenAPI + `/docs` + quickstart + samples) | V1 | Free | Developer growth surface |
+| **Bulk / mail-merge** (CSV or Sheet-link → variable map → throttled send) ★ | V1 | Pro/Team | CAN-SPAM: unsubscribe + suppression list; per-plan caps |
+
 ---
 
-## 3. Current State Audit
+## 3. Current State Audit — verified 2026-06-14
 
-The repo is a **working single-tenant Corsair demo**, not a generic blank T3 app. Extend it; don't restart it.
+> **Rewritten 2026-06-14 after a full code audit.** The repo is **far** beyond the original "plain demo." `tsc --noEmit` is clean and **36/36 vitest pass**. Backend is roughly **Phases 0–6 built**. The real problem is not missing features — it is that **the most monetizable features are implemented server-side but never surfaced in the UI** (value trapped one layer below the user).
 
-### 3.1 Already built and working
+### 3.1 Built and working (verified)
 | Area | File(s) | Status |
 |---|---|---|
-| T3 scaffold (Next 15, tRPC v11, Drizzle, Tailwind v4 deps) | `package.json`, `src/trpc/*` | ✅ |
-| Corsair init (`gmail`+`googlecalendar`, multi-tenancy on) | `src/server/corsair.ts` | ✅ |
-| Gmail router: search/get/listDrafts/refresh/createDraft/sendDraft/sendEmail | `src/server/api/routers/gmail.ts` | ✅ cache-first reads, live writes, dedupe+sort |
-| Calendar router: search/refresh/createDraft/sendInvite | `src/server/api/routers/calendar.ts` | ✅ week filtering, `sendUpdates` |
-| Email MIME encode / base64url / payload extraction | `src/server/lib/email.ts` | ✅ correct RFC 2822 |
-| Webhook ingest (`processWebhook`) | `src/app/api/webhooks/route.ts` | ⚠️ works; `tenantId` hardcoded `'dev'`, no signature/idempotency/fan-out |
-| Tenant helper | `src/server/lib/tenant.ts` | ⚠️ hardcoded `TENANT_ID ?? 'dev'` |
-| Drizzle schema (Corsair tables only) | `src/server/db/schema.ts` | ⚠️ no app/user/billing tables |
-| Minimal UI | `src/app/page.tsx`, `_components/{gmail,calendar}-panel.tsx` | ⚠️ functional but plain serif/white |
+| Bootstrap: full env schema, extracted dedupe helper, 8 test files | `src/env.js`, `src/server/lib/corsair-entities.ts`, `src/__tests__/*` | ✅ |
+| Auth + per-user tenancy: NextAuth + Google (restricted scopes), `protectedProcedure`, per-user Corsair tenant provisioning | `src/server/auth.ts`, `corsair-setup.ts`, `api/trpc.ts` | ✅ tenant = user, real token provisioning |
+| Gmail router: search/get/drafts/refresh/send + **reply/archive/markRead**, cache-first + rate-limited + typed 401 reconnect | `routers/gmail.ts`, `redis.ts`, `ratelimit.ts` | ✅ |
+| Calendar router: search/refresh/create/invite/**delete** | `routers/calendar.ts` | ✅ |
+| Premium UI: 3-pane dark shell, ⌘K palette, shortcuts (J/K/E/C/R/G·I/?), DOMPurify, settings | `_components/dashboard.tsx`, `command-palette.tsx`, `_hooks/use-shortcuts.ts` | ✅ Superhuman-grade |
+| AI Agent: streamed Gemini tool-calling with propose/confirm gates, transcript persisted | `api/agent/chat/route.ts`, `routers/agent.ts` | ✅ |
+| AI suite: compose / smart-reply / summarize / daily-brief (all premium-gated) | `routers/ai.ts` | ✅ backend |
+| Billing: Stripe Checkout/Portal + **signature-verified webhook**, 14-day trial, plan-gate | `routers/billing.ts`, `api/stripe/webhook`, `plan-gate.ts` | ✅ backend |
+| Scheduling availability engine + public booking page | `routers/scheduling.ts`, `app/book/[slug]` | ✅ public side |
+| Webhook ingest: idempotency (`webhook_events`), Gemini priority classify, contact upsert, realtime emit | `api/webhooks/route.ts` | ⚠️ works; see 3.3 |
+| Growth/legal: referrals, /privacy, /terms, data export, account delete, analytics | `routers/referral.ts`, `routers/auth.ts`, `lib/analytics.ts` | ✅ |
 
-### 3.2 Claimed-but-not-built (honest gaps)
-- **UI is plain serif/white markdown**, not the "glassmorphic dark mode" branding (`src/styles/globals.css`). No Framer Motion.
-- **No auth** — every procedure is `publicProcedure`; one hardcoded tenant (`dev`) serves everyone. **#1 blocker to multi-user.**
-- **No Upstash, no Gemini, no command palette/shortcuts, no billing, no realtime push.**
-- **`env.js` validates only `DATABASE_URL` + `NODE_ENV`.**
-- **No tests, CI, error tracking, analytics, or legal pages.**
-- **No git repo** (`.git` deleted) — re-init in Phase 0.
+### 3.2 The real gap — value trapped in the backend (UI not wired)
+| Built backend | UI surface | Impact |
+|---|---|---|
+| `ai.*` (compose/smartReply/summarize/dailyBrief) | **0 buttons** | The #1 reason to switch is invisible |
+| `scheduling.createLink/listLinks/toggleLink` (★★ viral loop) | **0** (only public `/book/[slug]`) | Users **cannot create** a link |
+| `template.*` (snippets CRUD) | **0** | Hidden |
+| `contacts.listContacts/toggleVip` | **0** | Hidden |
+| `email_meta` AI priority | **never read back into inbox** | No Split Inbox / badges despite AI doing the work |
+| Snooze / Send-Later / Follow-ups | schema + job runner only | **No create procedure, no cron → non-functional end-to-end** |
 
-### 3.3 Not-yet-installed deps
-`next-auth` · `stripe` · `@upstash/redis` · `@upstash/ratelimit` · `@upstash/qstash` · `ai` + `@ai-sdk/google` · `framer-motion` · `cmdk` · `sonner` · `isomorphic-dompurify` · `@sentry/nextjs` · `vitest` · `@playwright/test` · (V2) `pgvector` support.
+### 3.3 Production blockers (must fix before paid traffic)
+- **Realtime = in-memory Node `EventEmitter`** (`event-emitter.ts`) → breaks on Vercel serverless (multi-instance). Needs Pusher/Ably or Upstash.
+- **No cron / queue trigger** → `api/jobs/process` exists but nothing calls it; snooze/send-later/brief never fire.
+- **Webhook tenant from `?tenantId=` query param, no signature** → spoofable; AI classify runs inline blocking the 200.
+- **Checkout passes `price_mock_premium`**; `billing.ts:34` seeds Stripe customerId from `referredByCode` (bug).
+- **`tenant.ts` falls back to `'dev'`** instead of throwing on missing tenant (footgun).
+- **No Sentry / structured logging / CI gate**; `GEMINI/UPSTASH/STRIPE` env all optional → silent degradation.
+- **Google OAuth verification + CASA not started** — the GA gate (long lead).
 
 ---
 
@@ -269,11 +292,43 @@ webhook_events  { id(provider event id pk), provider, receivedAt, processedAt,
 
 **Privacy by design:** store **metadata, not bodies** in our tables; bodies live only in Corsair's cache. Smaller breach surface, simpler deletion. Migrations via `pnpm db:generate` → review SQL → `pnpm db:migrate` (never `db:push` to prod).
 
+### 6.1 Platform / org / helpdesk / API tables (org pivot — added 2026-06-14)
+
+```ts
+organizations    { id, name, slug(unique), ownerUserId, plan, stripeCustomerId, seats, createdAt }
+org_members      { id, orgId, userId, role(owner|admin|agent), status(active|invited),
+                   invitedEmail, createdAt, unique(orgId,userId) }
+shared_mailboxes { id, orgId, address, corsairTenantId, connectedByUserId, createdAt } // org-owned tenant
+
+tickets          { id, orgId, publicId(unique, e.g. GSN-1042), subject, requesterEmail, threadId,
+                   status(open|pending|solved|closed), priority, assigneeUserId, mailboxId,
+                   firstResponseAt, resolvedAt, createdAt, updatedAt }
+ticket_events    { id, ticketId, authorUserId, type(reply|note|status|assign),
+                   body, isInternal, createdAt }
+
+automations      { id, orgId, name, isEnabled, trigger(jsonb), actions(jsonb ordered),
+                   runOrder, createdAt }
+automation_runs  { id, automationId, ticketId, status, log(jsonb), createdAt }
+
+api_keys         { id, orgId, name, prefix, hashedKey, scopes(jsonb), lastUsedAt, revokedAt, createdAt }
+api_webhooks     { id, orgId, url, secret, events(jsonb), isActive, createdAt }
+api_request_log  { id, orgId, keyId, route, status, createdAt }
+
+bulk_campaigns   { id, orgId, userId, name, templateId, source(csv|sheet), status,
+                   total, sent, failed, scheduledAt, createdAt }
+bulk_recipients  { id, campaignId, email, vars(jsonb), status, sentAt }
+suppressions     { id, orgId, email, reason, createdAt, unique(orgId,email) }
+```
+
+**Tenancy migration:** `subscriptions` move to **org-scoped, seat-based** for Team (Pro stays per-user). On migration, each existing user gets a 1-person org (`ownerUserId = user.id`); their personal `corsairTenantId` stays; shared mailboxes get their own org-owned tenant. No procedure may address a ticket/automation/key outside the caller's org.
+
 ---
 
 ## 7. Phased Roadmap
 
 Each phase: **Goal → Tasks → Acceptance.** Ordered by dependency. P0–P4 = private beta + paid GA; P5–P8 = differentiation; P9–P10 = growth + hardening. Feature tags map back to §2.
+
+> **Status (2026-06-14):** P0–P6 are largely **built** (see §3). Remaining individual-product work is repackaged as **Surfacing Sprints S1–S3** (below §7's original phases). The **org pivot adds P11–P15 + P9.5**. Critical path to a sellable team product: **S1 → S3 → P11 → P12 → P13**; API (P14) and bulk (P15) branch off P11 in parallel.
 
 ### Phase 0 — Repo bootstrap & foundations (1 day)
 **Goal:** clean, safe foundation for a real product.
@@ -384,6 +439,72 @@ Each phase: **Goal → Tasks → Acceptance.** Ordered by dependency. P0–P4 = 
 
 ---
 
+### Surfacing Sprints — finish the individual product (mostly UI wiring over built backend)
+
+**S1 — Make the magic visible (4–5d).** Wire `ai.aiCompose` into compose ("✨ Write with AI"), `aiSmartReply` (1-click) + `aiSummarize` (TL;DR) into the reading pane, surface `aiDailyBrief` as the inbox landing card, and make **Split Inbox real** (join `email_meta` → Important/Other/VIP tabs + priority badges). *Acceptance: each AI action returns <3s, gated to trial/Pro; inbox shows AI priority.*
+
+**S2 — Complete viral loop + power features (4–5d).** Scheduling-link management UI (`createLink/listLinks/toggleLink`); add missing **snooze / send-later / follow-up create procedures**; real **Undo Send** (replace the fake toast); templates + contacts/VIP panels. *Acceptance: a user creates a public link end-to-end; snooze/send-later actually fire (needs S3 queue).*
+
+**S3 — Productionize (3–4d).** Replace in-memory realtime with **Pusher/Ably (or Upstash)** keyed by userId; stand up the **QStash queue + Vercel Cron** and wire `api/jobs/process`; **verify webhook signature** + resolve tenant from payload (drop `?tenantId=`) + offload AI classify off the 200 path; create real Stripe Product/Price (replace `price_mock_premium`) and fix the `billing.ts` customerId bug. *Acceptance: jobs fire on schedule; realtime works across instances; live Checkout flips entitlement.*
+
+---
+
+### Platform Phases (org pivot — added 2026-06-14)
+
+**Queue & rate-limiting architecture (decided 2026-06-14):** a thin `Queue` abstraction with **QStash as the default driver** (serverless-native: snooze/send-later/brief, automation eval, webhook delivery with retries). **BullMQ optional** as a dedicated-worker driver for high-throughput bulk send *only if* needed — BullMQ requires an always-on worker host (not Vercel functions) + a TCP Redis. Per-key / per-plan / per-mailbox limits via **Upstash ratelimit** (already installed).
+
+### Phase 11 — Org foundation (4–5 days) — **GATE for the platform**
+**Goal:** organizations are the billing + data boundary; solo user = 1-person org.
+- [ ] `organizations` / `org_members` schema + migration; backfill each user into a 1-person org.
+- [ ] Org-scoped tRPC context (`ctx.org`, `requireRole`); move Team `subscriptions` to per-seat.
+- [ ] Invite-by-email flow + role management UI; `audit_log` on member/role changes.
+- [ ] **Cross-org denial test** (no procedure addresses another org's tickets/keys/automations).
+
+**Acceptance:** two orgs cannot see each other's data; inviting a member consumes a seat; solo users unaffected.
+
+### Phase 12 — Shared inbox + Support tickets (5–6 days) — ★★
+**Goal:** a team triages `support@` with trackable IDs.
+- [ ] Connect a shared mailbox (org-owned Corsair tenant); ingest into a shared queue.
+- [ ] `publicId` generation (`GSN-####`) embedded in subject for threading + customer tracking.
+- [ ] Ticket queue UI (filter by status/assignee); ticket detail: reply, internal note, status, assignment.
+- [ ] First-response / resolution timestamps for SLA later; optional "X is viewing" collision hint.
+
+**Acceptance:** inbound to `support@` opens a ticket with an ID; assigning routes it; the requester's reply threads back to the same ID.
+
+### Phase 13 — Automation engine (4–5 days) — ★★
+**Goal:** "when an email hits `support@` matching X, auto-reply from template + assign + tag."
+- [ ] Trigger/condition/action model; evaluate via QStash off the webhook (never block ingest).
+- [ ] Actions: open ticket, assign, auto-reply (template), add label, fire outbound webhook.
+- [ ] Rule-builder UI + `automation_runs` log; per-org rate caps to prevent loops/storms.
+
+**Acceptance:** a configured rule auto-replies with the right ID + assignee within seconds; every run logged; disabling stops it.
+
+### Phase 14 — Public API + docs (5–6 days)
+**Goal:** users integrate their own apps.
+- [ ] `/api/v1/*` (messages send/list, tickets CRUD, automations trigger, contacts) with **API-key auth** (hashed, prefixed), per-key **scopes** + **rate limits**.
+- [ ] Signed **outbound webhooks** (`email.received`, `ticket.created/updated`) with retries (QStash) + delivery log.
+- [ ] **OpenAPI spec** + `/docs` (Scalar/Redoc) + quickstart + code samples; key management UI.
+
+**Acceptance:** an external curl with a scoped key sends mail + creates a ticket; revoking the key blocks it; a webhook delivers + retries on failure.
+
+### Phase 15 — Bulk / Sheets mail-merge (4–5 days)
+**Goal:** personalized mail in bulk (decided: **CSV / Sheet-link**, no new OAuth scope).
+- [ ] Upload CSV **or** paste a shared Google Sheet link → parse rows → map columns to template variables → preview.
+- [ ] Throttled queued send (`bulk_campaigns`/`bulk_recipients` + queue) under Gmail limits + per-plan caps.
+- [ ] **Unsubscribe link + suppression list** (CAN-SPAM / Google bulk-sender compliance); per-campaign stats.
+
+**Acceptance:** a 50-row merge sends personalized mail, respects caps + suppressions, and reports sent/failed.
+
+### Phase 9.5 — Seamless onboarding (2–3 days, woven across)
+**Goal:** wow in <60s.
+- [ ] Guided first run: Google sign-in → auto-provision (exists) → Daily Brief + one AI action → choose **individual vs team**.
+- [ ] If team: optional connect `support@` + invite a teammate; if individual: optional CSV import.
+- [ ] Progressive disclosure, empty states with one-click sample data, completion checklist.
+
+**Acceptance:** a brand-new user reaches a wow moment + an activated state in their first session, on either path.
+
+---
+
 ## 8. Security, Privacy & Compliance — the real launch gate
 
 > **Read this before optimizing for ship date.** The original PRD omits it; it's the thing most likely to delay a paid public launch.
@@ -401,9 +522,10 @@ Each phase: **Goal → Tasks → Acceptance.** Ordered by dependency. P0–P4 = 
 
 | Plan | Suggested | Includes | Gating |
 |---|---|---|---|
-| **Free** | $0 | 1 account, split inbox, calendar, search, palette + shortcuts, snooze, VIP, limited AI priority | No agent, no AI compose/summarize/brief, no scheduling links, no send-later |
-| **Pro** | ~$20/mo or $192/yr | Everything: AI agent, AI compose/reply/summarize, daily brief, scheduling links, send-later, follow-ups, snippets, multi-account, advanced + semantic search | Full |
-| **Team** (later) | ~$25/user/mo | Pro + shared snippets, shared inbox, assign/comments, analytics, admin, SSO/SCIM | Full + org |
+| **Free** | $0 | 1 account, split inbox, calendar, search, palette + shortcuts, snooze, VIP, limited AI priority, API docs | No agent, no AI compose/summarize/brief, no scheduling links, no send-later |
+| **Pro** | ~$20/mo or $192/yr | Everything individual: AI agent, AI compose/reply/summarize, daily brief, scheduling links, send-later, follow-ups, snippets, multi-account, advanced search, **bulk mail-merge (capped)** | Full individual |
+| **Team** | ~$25/seat/mo | Pro + **shared inbox, support tickets/IDs, assignment + internal notes, automation engine**, shared snippets, analytics, admin | Per-seat, org-scoped |
+| **Platform add-on** | usage / tier | **Public API access, API keys + scopes, outbound webhooks, higher bulk caps** | Per-org, metered |
 
 - **14-day Pro trial** (card-required recommended for a prosumer tool). Stripe Checkout + Portal.
 - **Cost control:** AI is the variable cost — cheapest Gemini model for priority/classification, aggressive Upstash caching, per-plan rate limits on agent turns + compose.
@@ -478,6 +600,9 @@ Each phase: **Goal → Tasks → Acceptance.** Ordered by dependency. P0–P4 = 
 - [ ] Flagship trio demoable: agent chat, scheduling links, daily brief.
 
 ## 17. Open Decisions (call these early)
+
+**Resolved 2026-06-14:** (1) Positioning → **two-layer** (prosumer wedge + team/platform expansion). (2) **Org-first** — Organization is the billing/data boundary now (solo = 1-person org). (3) Bulk/Sheets → **CSV / Sheet-link mail-merge** for v1 (no new OAuth scope; live Sheets sync deferred). (4) Queue → **QStash default, BullMQ optional** for bulk. (5) Build **all** new pillars (P11–P15). Auth → NextAuth (in use). Realtime → managed Pusher/Ably (S3). Items below remain open.
+
 1. **Positioning:** prosumer-first + AI (plan's assumption, recommended) vs team-first. Affects sequencing of §2.8.
 2. **Auth:** NextAuth (assumed) vs Clerk.
 3. **Free trial:** card-required (recommended) vs no-card.

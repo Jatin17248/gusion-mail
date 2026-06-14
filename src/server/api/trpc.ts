@@ -12,6 +12,8 @@ import { ZodError } from "zod";
 
 import { db } from "@/server/db";
 import { auth } from "@/server/auth";
+import { users, organizations, orgMembers } from "@/server/db/schema";
+import { eq, and } from "drizzle-orm";
 
 /**
  * 1. CONTEXT
@@ -27,9 +29,79 @@ import { auth } from "@/server/auth";
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth();
+
+  let org: { id: string; name: string; role: string } | null = null;
+
+  if (session?.user?.id) {
+    const userId = session.user.id;
+    // 1. Fetch user to check activeOrgId
+    const dbUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (dbUser) {
+      let activeOrgId = dbUser.activeOrgId;
+      let memberRecord = null;
+
+      if (activeOrgId) {
+        memberRecord = await db.query.orgMembers.findFirst({
+          where: and(
+            eq(orgMembers.userId, userId),
+            eq(orgMembers.orgId, activeOrgId)
+          ),
+        });
+      }
+
+      if (!memberRecord) {
+        // Fallback to first org they are member of
+        memberRecord = await db.query.orgMembers.findFirst({
+          where: eq(orgMembers.userId, userId),
+        });
+        if (memberRecord) {
+          activeOrgId = memberRecord.orgId;
+          // Save activeOrgId
+          await db.update(users).set({ activeOrgId }).where(eq(users.id, userId));
+        }
+      }
+
+      if (!memberRecord) {
+        // No org exists for user, create a default one
+        const orgId = crypto.randomUUID();
+        const orgName = `${dbUser.name ?? "Personal"}'s Team`;
+        await db.insert(organizations).values({
+          id: orgId,
+          name: orgName,
+        });
+        await db.insert(orgMembers).values({
+          orgId,
+          userId,
+          role: "owner",
+        });
+        await db.update(users).set({ activeOrgId: orgId }).where(eq(users.id, userId));
+
+        activeOrgId = orgId;
+        memberRecord = { orgId, userId, role: "owner" };
+      }
+
+      if (activeOrgId && memberRecord) {
+        const dbOrg = await db.query.organizations.findFirst({
+          where: eq(organizations.id, activeOrgId),
+        });
+        if (dbOrg) {
+          org = {
+            id: dbOrg.id,
+            name: dbOrg.name,
+            role: memberRecord.role,
+          };
+        }
+      }
+    }
+  }
+
   return {
     db,
     session,
+    org,
     ...opts,
   };
 };
@@ -128,3 +200,29 @@ const isAuthed = t.middleware(({ next, ctx }) => {
 });
 
 export const protectedProcedure = t.procedure.use(timingMiddleware).use(isAuthed);
+
+export const orgProcedure = protectedProcedure.use((opts) => {
+  if (!opts.ctx.org) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Organization context required." });
+  }
+  return opts.next({
+    ctx: {
+      org: opts.ctx.org,
+    },
+  });
+});
+
+export const requireOrgRole = (roles: ("owner" | "admin" | "member")[]) =>
+  t.middleware(({ next, ctx }) => {
+    if (!ctx.session?.user || !ctx.org) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Not a member of an organization." });
+    }
+    if (!roles.includes(ctx.org.role as any)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient organization permissions." });
+    }
+    return next({
+      ctx: {
+        org: ctx.org,
+      },
+    });
+  });

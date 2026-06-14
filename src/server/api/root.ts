@@ -9,6 +9,11 @@ import { templateRouter } from "@/server/api/routers/template";
 import { schedulingRouter } from "@/server/api/routers/scheduling";
 import { contactsRouter } from "@/server/api/routers/contacts";
 import { referralRouter } from "@/server/api/routers/referral";
+import { orgRouter } from "@/server/api/routers/org";
+import { ticketsRouter } from "@/server/api/routers/tickets";
+import { automationRouter } from "@/server/api/routers/automation";
+import { apiKeysRouter } from "@/server/api/routers/apikeys";
+import { bulkRouter } from "@/server/api/routers/bulk";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -28,6 +33,11 @@ export const appRouter = createTRPCRouter({
   scheduling: schedulingRouter,
   contacts: contactsRouter,
   referral: referralRouter,
+  org: orgRouter,
+  tickets: ticketsRouter,
+  automation: automationRouter,
+  apikeys: apiKeysRouter,
+  bulk: bulkRouter,
 });
 
 // export type definition of API

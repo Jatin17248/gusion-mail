@@ -82,6 +82,8 @@ vi.mock("@/server/lib/ratelimit", () => ({
 
 vi.mock("@/server/lib/redis", () => ({
   redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(true),
     del: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -297,6 +299,43 @@ describe("Growth & Compliance Routers", () => {
       const decoded = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
       expect(decoded).toContain("My reply body");
       expect(decoded).toContain("Sent with Gusion Mail - https://mail.gusion.in");
+    });
+
+    it("should retrieve emails filtered by tab", async () => {
+      const mockList = vi.fn().mockResolvedValue([
+        { entity_id: "msg_all_1", data: { subject: "All Subject", internalDate: "1718361000" } }
+      ]);
+      const mockFindMany = vi.fn().mockResolvedValue([
+        { entity_id: "msg_imp_1", data: { subject: "Imp Subject", internalDate: "1718362000" } }
+      ]);
+      vi.mocked(getTenant).mockReturnValue({
+        gmail: {
+          db: {
+            messages: {
+              list: mockList,
+              findManyByEntityIds: mockFindMany,
+            },
+          },
+        },
+      } as any);
+
+      // Mock database calls
+      vi.mocked(db.query.emailMeta.findMany).mockResolvedValue([
+        { gmailMessageId: "msg_imp_1", priority: "high", category: "important" }
+      ] as any);
+
+      const caller = appRouter.createCaller(mockCtx as any);
+      
+      // Test tab: all
+      const resAll = await caller.gmail.searchEmails({ query: "", tab: "all" });
+      expect(resAll).toHaveLength(1);
+      expect(resAll[0]?.subject).toBe("All Subject");
+
+      // Test tab: important
+      const resImp = await caller.gmail.searchEmails({ query: "", tab: "important" });
+      expect(resImp).toHaveLength(1);
+      expect(resImp[0]?.subject).toBe("Imp Subject");
+      expect(resImp[0]?.priority).toBe("high");
     });
   });
 });

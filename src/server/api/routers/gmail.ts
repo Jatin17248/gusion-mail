@@ -15,8 +15,8 @@ import {
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { users, emailMeta, sendQueue } from "@/server/db/schema";
+import { eq, and, or, inArray, ne, desc } from "drizzle-orm";
 
 const paginationSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
@@ -78,41 +78,137 @@ export const gmailRouter = createTRPCRouter({
     .input(
       paginationSchema.extend({
         query: z.string(),
+        tab: z.enum(["important", "other", "vip", "all"]).optional().default("all"),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const cacheKey = `gmail:inbox:${ctx.session.user.id}:${input.limit}:${input.offset}`;
+      const cacheKey = `gmail:inbox:${ctx.session.user.id}:${input.tab}:${input.limit}:${input.offset}`;
       const isQueryEmpty = !input.query.trim();
 
       if (isQueryEmpty) {
-        const cached = await redis.get(cacheKey) as MappedMessage[] | null;
+        const cached = await redis.get(cacheKey) as (MappedMessage & { priority?: string; category?: string })[] | null;
         if (cached) return cached;
       }
 
       const tenant = getTenant(ctx.session.user.corsairTenantId);
+      let result: MappedMessage[] = [];
 
-      const messages = !isQueryEmpty
-        ? await tenant.gmail.db.messages.search({
-            data: {
-              snippet: { contains: input.query },
-            },
+      if (isQueryEmpty) {
+        if (input.tab === "all") {
+          const messages = await tenant.gmail.db.messages.list({
             limit: input.limit,
             offset: input.offset,
-          })
-        : await tenant.gmail.db.messages.list({
+          });
+          result = sortMessagesNewestFirst(
+            dedupeByEntityId(messages).map(mapMessage),
+          );
+        } else {
+          let whereClause;
+          if (input.tab === "important") {
+            whereClause = and(
+              eq(emailMeta.userId, ctx.session.user.id),
+              or(
+                inArray(emailMeta.priority, ["urgent", "high"]),
+                eq(emailMeta.category, "important")
+              )
+            );
+          } else if (input.tab === "other") {
+            whereClause = and(
+              eq(emailMeta.userId, ctx.session.user.id),
+              or(
+                inArray(emailMeta.priority, ["normal", "low"]),
+                eq(emailMeta.category, "other")
+              ),
+              ne(emailMeta.isVipSender, true)
+            );
+          } else {
+            // vip
+            whereClause = and(
+              eq(emailMeta.userId, ctx.session.user.id),
+              eq(emailMeta.isVipSender, true)
+            );
+          }
+
+          const metas = await db.query.emailMeta.findMany({
+            where: whereClause,
+            orderBy: [desc(emailMeta.createdAt)],
             limit: input.limit,
             offset: input.offset,
           });
 
-      const result = sortMessagesNewestFirst(
-        dedupeByEntityId(messages).map(mapMessage),
-      );
+          if (metas.length === 0) {
+            return [];
+          }
 
-      if (isQueryEmpty) {
-        await redis.set(cacheKey, result, { ex: 60 });
+          const messageIds = metas.map((m) => m.gmailMessageId);
+          const messages = await tenant.gmail.db.messages.findManyByEntityIds(messageIds);
+          result = sortMessagesNewestFirst(
+            dedupeByEntityId(messages).map(mapMessage),
+          );
+        }
+      } else {
+        const messages = await tenant.gmail.db.messages.search({
+          data: {
+            snippet: { contains: input.query },
+          },
+          limit: input.limit,
+          offset: input.offset,
+        });
+        result = sortMessagesNewestFirst(
+          dedupeByEntityId(messages).map(mapMessage),
+        );
       }
 
-      return result;
+      // Join emailMeta
+      const returnedIds = result.map((m) => m.id);
+      const metas = returnedIds.length > 0
+        ? await db.query.emailMeta.findMany({
+            where: and(
+              eq(emailMeta.userId, ctx.session.user.id),
+              inArray(emailMeta.gmailMessageId, returnedIds)
+            ),
+          })
+        : [];
+
+      const metaMap = new Map(metas.map((m) => [m.gmailMessageId, m]));
+
+      const finalResult = result.map((m) => {
+        const meta = metaMap.get(m.id);
+        return {
+          ...m,
+          priority: meta?.priority ?? "normal",
+          category: meta?.category ?? "other",
+        };
+      });
+
+      // Filter out snoozed emails from active lists
+      const activeResult = finalResult.filter((m) => {
+        const meta = metaMap.get(m.id);
+        return meta?.isSnoozed !== true;
+      });
+
+      // Filter search results in-memory by tab if search query is active
+      let filteredResult = activeResult;
+      if (!isQueryEmpty && input.tab !== "all") {
+        filteredResult = activeResult.filter((m) => {
+          if (input.tab === "important") {
+            return m.priority === "urgent" || m.priority === "high" || m.category === "important";
+          } else if (input.tab === "other") {
+            const meta = metaMap.get(m.id);
+            return (m.priority === "normal" || m.priority === "low" || m.category === "other") && meta?.isVipSender !== true;
+          } else if (input.tab === "vip") {
+            const meta = metaMap.get(m.id);
+            return meta?.isVipSender === true;
+          }
+          return true;
+        });
+      }
+
+      if (isQueryEmpty) {
+        await redis.set(cacheKey, filteredResult, { ex: 60 });
+      }
+
+      return filteredResult;
     }),
 
   getMessage: protectedProcedure
@@ -386,6 +482,96 @@ export const gmailRouter = createTRPCRouter({
       // Invalidate cache
       await redis.del(`gmail:inbox:${ctx.session.user.id}:${50}:${0}`);
       await redis.del(`gmail:message:${ctx.session.user.id}:${input.id}`);
+
+      return { success: true };
+    }),
+
+  snoozeEmail: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().min(1),
+        snoozeUntil: z.date(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tenant = getTenant(ctx.session.user.corsairTenantId);
+      
+      // Archive from inbox first
+      await tenant.gmail.api.messages.modify({
+        id: input.id,
+        removeLabelIds: ["INBOX"],
+      });
+
+      // Find or create email meta record
+      const existing = await db.query.emailMeta.findFirst({
+        where: and(
+          eq(emailMeta.userId, ctx.session.user.id),
+          eq(emailMeta.gmailMessageId, input.id)
+        ),
+      });
+
+      if (existing) {
+        await db
+          .update(emailMeta)
+          .set({
+            isSnoozed: true,
+            snoozeUntil: input.snoozeUntil,
+            updatedAt: new Date(),
+          })
+          .where(eq(emailMeta.id, existing.id));
+      } else {
+        const dbMessage = await tenant.gmail.db.messages.findByEntityId(input.id);
+        await db.insert(emailMeta).values({
+          userId: ctx.session.user.id,
+          gmailMessageId: input.id,
+          threadId: dbMessage?.data.threadId ?? "",
+          isSnoozed: true,
+          snoozeUntil: input.snoozeUntil,
+        });
+      }
+
+      // Invalidate cache
+      await redis.del(`gmail:inbox:${ctx.session.user.id}:all:${50}:${0}`);
+      await redis.del(`gmail:inbox:${ctx.session.user.id}:important:${50}:${0}`);
+      await redis.del(`gmail:inbox:${ctx.session.user.id}:other:${50}:${0}`);
+      await redis.del(`gmail:inbox:${ctx.session.user.id}:vip:${50}:${0}`);
+      await redis.del(`gmail:message:${ctx.session.user.id}:${input.id}`);
+
+      return { success: true };
+    }),
+
+  scheduleSend: protectedProcedure
+    .input(
+      z.object({
+        to: z.string().email(),
+        subject: z.string().min(1),
+        body: z.string().min(1),
+        sendAt: z.date(),
+        threadId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, ctx.session.user.id),
+      });
+      const viralSignatureEnabled = user?.viralSignatureEnabled ?? true;
+      const body = viralSignatureEnabled
+        ? `${input.body}\n\n--\nSent with Gusion Mail - https://mail.gusion.in`
+        : input.body;
+
+      const raw = encodeRawEmail({
+        to: input.to,
+        subject: input.subject,
+        body,
+      });
+
+      await db.insert(sendQueue).values({
+        userId: ctx.session.user.id,
+        rawBase64Url: raw,
+        threadId: input.threadId ?? null,
+        sendAt: input.sendAt,
+        status: "pending",
+      });
 
       return { success: true };
     }),

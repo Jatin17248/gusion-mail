@@ -24,6 +24,7 @@ export const users = pgTable("users", {
   referralCode: text("referral_code").unique(),
   referredByCode: text("referred_by_code"),
   trialStartedAt: timestamp("trial_started_at", { mode: "date" }),
+  activeOrgId: text("active_org_id"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -235,4 +236,159 @@ export const referrals = pgTable("referrals", {
   rewardGrantedAt: timestamp("reward_granted_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
+
+export const organizations = pgTable("organizations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const orgMembers = pgTable("org_members", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("member"), // 'owner' | 'admin' | 'member'
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const tickets = pgTable("tickets", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  publicId: text("public_id").unique().notNull(), // "GSN-1001"
+  gmailMessageId: text("gmail_message_id"),
+  threadId: text("thread_id"),
+  subject: text("subject").notNull(),
+  snippet: text("snippet"),
+  status: text("status").default("open").notNull(), // 'open' | 'pending' | 'resolved'
+  assignedUserId: text("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+  fromEmail: text("from_email").notNull(),
+  fromName: text("from_name"),
+  tags: text("tags"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const rules = pgTable("rules", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull().default("email_received"),
+  conditions: text("conditions").notNull().default("[]"), // JSON string
+  actions: text("actions").notNull().default("[]"), // JSON string
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const automationRuns = pgTable("automation_runs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  ruleId: text("rule_id")
+    .notNull()
+    .references(() => rules.id, { onDelete: "cascade" }),
+  gmailMessageId: text("gmail_message_id"),
+  status: text("status").notNull(), // 'success' | 'failed'
+  error: text("error"),
+  actionsExecuted: text("actions_executed"), // JSON string
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const apiKeys = pgTable("api_keys", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyPrefix: text("key_prefix").notNull().default("gsn_live_"),
+  hashedKey: text("hashed_key").unique().notNull(),
+  scopes: text("scopes").notNull().default("[]"), // JSON string
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const outboundWebhooks = pgTable("outbound_webhooks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  events: text("events").notNull().default("[]"), // JSON string
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const webhookDeliveryLogs = pgTable("webhook_delivery_logs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  webhookId: text("webhook_id")
+    .notNull()
+    .references(() => outboundWebhooks.id, { onDelete: "cascade" }),
+  event: text("event").notNull(),
+  payload: text("payload").notNull(),
+  responseStatus: integer("response_status"),
+  responseBody: text("response_body"),
+  success: boolean("success").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const bulkCampaigns = pgTable("bulk_campaigns", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").default("pending").notNull(), // 'pending' | 'running' | 'completed' | 'failed'
+  totalRecipients: integer("total_recipients").default(0).notNull(),
+  sentCount: integer("sent_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const bulkRecipients = pgTable("bulk_recipients", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  campaignId: text("campaign_id")
+    .notNull()
+    .references(() => bulkCampaigns.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  variables: text("variables").notNull().default("{}"), // JSON string
+  status: text("status").default("pending").notNull(), // 'pending' | 'sent' | 'failed' | 'unsubscribed'
+  sentAt: timestamp("sent_at", { mode: "date" }),
+  error: text("error"),
+});
+
+export const suppressionList = pgTable("suppression_list", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+}, (table) => [
+  {
+    parent: unique().on(table.orgId, table.email),
+  },
+]);
+
 

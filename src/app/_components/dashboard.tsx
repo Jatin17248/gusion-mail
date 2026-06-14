@@ -6,6 +6,10 @@ import DOMPurify from "isomorphic-dompurify";
 import { useShortcuts } from "@/app/_hooks/use-shortcuts";
 import { CommandPalette } from "@/app/_components/command-palette";
 import { AgentDrawer } from "@/app/_components/agent-drawer";
+import { AutomationsSettingsView } from "@/app/_components/automations-settings";
+import { DeveloperSettingsView } from "@/app/_components/developer-settings";
+import { SuppressionListSettingsView } from "@/app/_components/suppression-settings";
+import { BulkMergeView } from "@/app/_components/bulk-merge";
 import {
   formatMessageDate,
   formatSender,
@@ -34,6 +38,17 @@ import {
   Download,
   ExternalLink,
   Lock,
+  Terminal,
+  Sliders,
+  Eye,
+  EyeOff,
+  UserCheck,
+  Play,
+  FileSpreadsheet,
+  Activity,
+  Check,
+  Edit,
+  Shield,
 } from "lucide-react";
 
 
@@ -41,7 +56,8 @@ import {
 export function Dashboard() {
   const { data: session } = useSession();
   const utils = api.useUtils();
-  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "settings">("gmail");
+  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "settings" | "tickets" | "bulk">("gmail");
+  const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -54,6 +70,14 @@ export function Dashboard() {
   const [composeTo, setComposeTo] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
+  const [aiComposePrompt, setAiComposePrompt] = useState("");
+  const [showSnoozeDropdown, setShowSnoozeDropdown] = useState(false);
+  const [showSendLaterDropdown, setShowSendLaterDropdown] = useState(false);
+
+  // Undo Send state
+  const [undoActive, setUndoActive] = useState(false);
+  const [undoDraft, setUndoDraft] = useState<{ to: string; subject: string; body: string; sendAt?: Date } | null>(null);
+  const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   // Reply inline state
   const [replyBody, setReplyBody] = useState("");
@@ -126,7 +150,7 @@ export function Dashboard() {
 
   // Gmail queries/mutations
   const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
-    { query: debouncedSearch, limit: 30 },
+    { query: debouncedSearch, limit: 30, tab: inboxTab },
     { enabled: activeTab === "gmail" }
   );
 
@@ -155,6 +179,91 @@ export function Dashboard() {
     onError: (err) => toast.error(err.message || "Failed to send."),
   });
 
+  const snoozeEmail = api.gmail.snoozeEmail.useMutation({
+    onSuccess: () => {
+      toast.success("Email snoozed!");
+      setActiveMessageId(null);
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => toast.error(err.message || "Failed to snooze email."),
+  });
+
+  const scheduleSend = api.gmail.scheduleSend.useMutation({
+    onSuccess: () => {
+      toast.success("Email scheduled successfully!");
+      setComposeOpen(false);
+      setComposeTo("");
+      setComposeSubject("");
+      setComposeBody("");
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => toast.error(err.message || "Failed to schedule send."),
+  });
+
+  const triggerSendEmail = (to: string, subject: string, body: string, sendAt?: Date) => {
+    setComposeOpen(false);
+    setUndoDraft({ to, subject, body, sendAt });
+    setUndoActive(true);
+
+    const toastId = toast.info(
+      sendAt
+        ? `Scheduling send for ${sendAt.toLocaleString()}...`
+        : "Sending email in 5s...",
+      {
+        duration: 5000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            handleUndoSend(to, subject, body, sendAt);
+          },
+        },
+      }
+    );
+
+    const timeoutId = setTimeout(() => {
+      if (sendAt) {
+        scheduleSend.mutate({ to, subject, body, sendAt });
+      } else {
+        sendEmail.mutate({ to, subject, body });
+      }
+      setUndoActive(false);
+      setUndoDraft(null);
+      setUndoTimeoutId(null);
+      toast.dismiss(toastId);
+    }, 5000);
+
+    setUndoTimeoutId(timeoutId);
+  };
+
+  const handleUndoSend = (to: string, subject: string, body: string, sendAt?: Date) => {
+    setUndoActive((active) => {
+      if (!active) return false;
+      setComposeTo(to);
+      setComposeSubject(subject);
+      setComposeBody(body);
+      setComposeOpen(true);
+      toast.success("Sending cancelled. Draft restored.");
+      return false;
+    });
+
+    if (undoTimeoutId) {
+      clearTimeout(undoTimeoutId);
+      setUndoTimeoutId(null);
+    }
+    setUndoDraft(null);
+  };
+
+  const generateAiDraft = api.ai.aiCompose.useMutation({
+    onSuccess: (res) => {
+      setComposeBody(res.text);
+      setAiComposePrompt("");
+      toast.success("AI draft generated!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to generate draft.");
+    },
+  });
+
   const replyToEmail = api.gmail.replyToEmail.useMutation({
     onSuccess: () => {
       toast.success("Reply sent!");
@@ -166,6 +275,41 @@ export function Dashboard() {
     },
     onError: (err) => toast.error(err.message || "Failed to send reply."),
   });
+
+  const [smartReplies, setSmartReplies] = useState<{ label: string; body: string }[]>([]);
+  const [threadSummary, setThreadSummary] = useState<string | null>(null);
+
+  const getSmartReplies = api.ai.aiSmartReply.useMutation({
+    onSuccess: (res) => {
+      setSmartReplies(res.replies);
+    },
+    onError: () => {
+      setSmartReplies([]);
+    },
+  });
+
+  const summarizeThread = api.ai.aiSummarize.useMutation({
+    onSuccess: (res) => {
+      setThreadSummary(res.summary);
+      toast.success("Summary generated!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to summarize thread.");
+    },
+  });
+
+  const { data: dailyBriefData } = api.ai.aiDailyBrief.useQuery(undefined, {
+    enabled: activeTab === "gmail" && !activeMessageId,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (activeMessageId) {
+      setThreadSummary(null);
+      setSmartReplies([]);
+      getSmartReplies.mutate({ messageId: activeMessageId });
+    }
+  }, [activeMessageId, getSmartReplies]);
 
   const archiveEmail = api.gmail.archiveEmail.useMutation({
     onMutate: async ({ id }) => {
@@ -411,6 +555,34 @@ export function Dashboard() {
             </button>
             <button
               onClick={() => {
+                setActiveTab("tickets");
+                setAgentOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
+                activeTab === "tickets"
+                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+              }`}
+            >
+              <HelpCircle size={16} />
+              <span>Support Queue</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("bulk");
+                setAgentOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
+                activeTab === "bulk"
+                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+              }`}
+            >
+              <FileSpreadsheet size={16} />
+              <span>Bulk Campaign</span>
+            </button>
+            <button
+              onClick={() => {
                 setActiveTab("settings");
                 setAgentOpen(false);
               }}
@@ -504,6 +676,50 @@ export function Dashboard() {
                 </div>
               </div>
 
+              {/* Split Inbox Tabs */}
+              <div className="flex border-b border-zinc-900 px-2 bg-zinc-950/20 text-xs">
+                <button
+                  onClick={() => setInboxTab("important")}
+                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
+                    inboxTab === "important"
+                      ? "border-indigo-500 text-indigo-400 font-semibold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Important
+                </button>
+                <button
+                  onClick={() => setInboxTab("other")}
+                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
+                    inboxTab === "other"
+                      ? "border-indigo-500 text-indigo-400 font-semibold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Other
+                </button>
+                <button
+                  onClick={() => setInboxTab("vip")}
+                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
+                    inboxTab === "vip"
+                      ? "border-indigo-500 text-indigo-400 font-semibold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  VIP
+                </button>
+                <button
+                  onClick={() => setInboxTab("all")}
+                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
+                    inboxTab === "all"
+                      ? "border-indigo-500 text-indigo-400 font-semibold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+
               {/* Emails List */}
               <div className="flex-1 overflow-y-auto divide-y divide-zinc-900/50">
                 {emailsLoading ? (
@@ -533,9 +749,27 @@ export function Dashboard() {
                       } hover:bg-zinc-900/20`}
                     >
                       <div className="flex justify-between items-start gap-2 mb-1">
-                        <span className="text-xs font-semibold text-zinc-300 truncate max-w-[200px]">
-                          {parseEmailAddress(email.from).name || parseEmailAddress(email.from).email}
-                        </span>
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="text-xs font-semibold text-zinc-300 truncate max-w-[150px]">
+                            {parseEmailAddress(email.from).name || parseEmailAddress(email.from).email}
+                          </span>
+                          {email.priority && email.priority !== "normal" && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
+                              email.priority === "urgent"
+                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                : email.priority === "high"
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-zinc-800 text-zinc-400"
+                            }`}>
+                              {email.priority}
+                            </span>
+                          )}
+                          {email.category === "important" && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                              Important
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-zinc-500 whitespace-nowrap">
                           {formatMessageDate(email.date)}
                         </span>
@@ -560,14 +794,34 @@ export function Dashboard() {
                   <span className="text-xs">Opening thread...</span>
                 </div>
               ) : !selectedMessage ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 text-center p-8">
-                  <div className="w-12 h-12 rounded-full border border-zinc-900 bg-zinc-900/20 flex items-center justify-center mb-4">
-                    <Mail size={20} />
+                <div className="flex-1 flex flex-col justify-start p-6 overflow-y-auto space-y-6">
+                  {/* Daily Brief Header */}
+                  <div className="p-5 rounded-2xl border border-zinc-900 bg-zinc-900/10 backdrop-blur-md relative overflow-hidden space-y-3">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+                    <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
+                      <Sparkles size={14} className="text-indigo-400" />
+                      Your Daily Briefing
+                    </h3>
+                    {dailyBriefData?.brief ? (
+                      <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap text-left font-medium">
+                        {dailyBriefData.brief}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-zinc-500 italic text-left">
+                        Scanning your inbox for important updates...
+                      </p>
+                    )}
                   </div>
-                  <h3 className="text-sm font-semibold text-zinc-300 mb-1">No thread selected</h3>
-                  <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
-                    Select an email from the inbox list or press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400">Enter</kbd> to read a conversation.
-                  </p>
+
+                  <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 text-center">
+                    <div className="w-12 h-12 rounded-full border border-zinc-900 bg-zinc-900/20 flex items-center justify-center mb-4">
+                      <Mail size={20} />
+                    </div>
+                    <h3 className="text-sm font-semibold text-zinc-300 mb-1">No thread selected</h3>
+                    <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+                      Select an email from the inbox list or press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400">Enter</kbd> to read a conversation.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -588,7 +842,7 @@ export function Dashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 relative">
                       <button
                         onClick={() => archiveEmail.mutate({ id: selectedMessage.id })}
                         className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
@@ -596,11 +850,112 @@ export function Dashboard() {
                       >
                         <Archive size={16} />
                       </button>
+
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowSnoozeDropdown(!showSnoozeDropdown)}
+                          className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
+                          title="Snooze"
+                        >
+                          <Clock size={16} />
+                        </button>
+                        {showSnoozeDropdown && (
+                          <div className="absolute right-0 mt-2 w-64 p-3 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-2">
+                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Snooze Email Until</div>
+                            <button
+                              onClick={() => {
+                                const d = new Date();
+                                d.setHours(d.getHours() + 3);
+                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
+                                setShowSnoozeDropdown(false);
+                              }}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
+                            >
+                              <span>Later today</span>
+                              <span className="text-[10px] text-zinc-550">
+                                {new Date(Date.now() + 3 * 3600 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const d = new Date();
+                                d.setDate(d.getDate() + 1);
+                                d.setHours(8, 0, 0, 0);
+                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
+                                setShowSnoozeDropdown(false);
+                              }}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
+                            >
+                              <span>Tomorrow morning</span>
+                              <span className="text-[10px] text-zinc-550">8:00 AM</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const d = new Date();
+                                const daysToAdd = (1 + 7 - d.getDay()) % 7 || 7;
+                                d.setDate(d.getDate() + daysToAdd);
+                                d.setHours(8, 0, 0, 0);
+                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
+                                setShowSnoozeDropdown(false);
+                              }}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-305 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
+                            >
+                              <span>Next week</span>
+                              <span className="text-[10px] text-zinc-550">Mon 8:00 AM</span>
+                            </button>
+                            <div className="border-t border-zinc-900 my-1" />
+                            <div className="px-1 space-y-1">
+                              <label className="block text-[9px] text-zinc-500 font-semibold">Custom date & time</label>
+                              <input
+                                type="datetime-local"
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const d = new Date(e.target.value);
+                                    snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
+                                    setShowSnoozeDropdown(false);
+                                  }
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-850 rounded text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Reading Pane Body */}
                   <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                    {/* AI Summary Card */}
+                    <div className="p-4 rounded-xl border border-indigo-500/10 bg-indigo-500/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                          <Sparkles size={10} />
+                          AI Thread Summary
+                        </span>
+                        {!threadSummary && (
+                          <button
+                            onClick={() => summarizeThread.mutate({ threadId: selectedMessage.threadId })}
+                            disabled={summarizeThread.isPending}
+                            className="px-2.5 py-1 text-[10px] font-semibold bg-indigo-600/20 hover:bg-indigo-650 text-indigo-300 hover:text-white rounded transition cursor-pointer disabled:opacity-50"
+                          >
+                            {summarizeThread.isPending ? "Generating..." : "Generate Summary"}
+                          </button>
+                        )}
+                      </div>
+                      {threadSummary ? (
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                          {threadSummary}
+                        </p>
+                      ) : !summarizeThread.isPending ? (
+                        <p className="text-[11px] text-zinc-500 italic">
+                          Click above to generate a brief summary of this conversation.
+                        </p>
+                      ) : (
+                        <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
+                      )}
+                    </div>
+
                     <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
                       <div
                         dangerouslySetInnerHTML={{
@@ -612,6 +967,23 @@ export function Dashboard() {
                     {/* Inline Reply Form */}
                     <div className="pt-6 border-t border-zinc-900">
                       <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Quick Reply</h4>
+
+                      {/* AI Smart Replies Suggestions */}
+                      {smartReplies.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {smartReplies.map((reply, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setReplyBody(reply.body)}
+                              className="px-3 py-1.5 bg-zinc-900 hover:bg-indigo-600 border border-zinc-800 hover:border-indigo-500 text-zinc-300 hover:text-white text-xs rounded-full transition cursor-pointer text-left"
+                              title={reply.body}
+                            >
+                              💡 {reply.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="space-y-3">
                         <textarea
                           id="reply-input"
@@ -756,6 +1128,15 @@ export function Dashboard() {
         )}
 
         {activeTab === "settings" && <SettingsView />}
+        {activeTab === "bulk" && <BulkMergeView />}
+        {activeTab === "tickets" && (
+          <TicketsView
+            onOpenMessage={(msgId) => {
+              setActiveTab("gmail");
+              setActiveMessageId(msgId);
+            }}
+          />
+        )}
       </div>
 
       {/* Floating help / keyboard overlay trigger */}
@@ -856,6 +1237,25 @@ export function Dashboard() {
                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
                 />
               </div>
+              <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-lg space-y-2">
+                <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">✨ Write with AI</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. Write a friendly follow-up about the project budget..."
+                    value={aiComposePrompt}
+                    onChange={(e) => setAiComposePrompt(e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-855 rounded-md text-xs text-zinc-200 placeholder:text-zinc-505 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                  <button
+                    onClick={() => generateAiDraft.mutate({ prompt: aiComposePrompt })}
+                    disabled={!aiComposePrompt || generateAiDraft.isPending}
+                    className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>{generateAiDraft.isPending ? "Drafting..." : "Draft"}</span>
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-zinc-500 mb-1">Message</label>
                 <textarea
@@ -874,14 +1274,72 @@ export function Dashboard() {
               >
                 Cancel
               </button>
-              <button
-                onClick={() => sendEmail.mutate({ to: composeTo, subject: composeSubject, body: composeBody })}
-                disabled={!composeTo || !composeSubject || !composeBody || sendEmail.isPending}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
-              >
-                <span>Send</span>
-                <Send size={10} />
-              </button>
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => triggerSendEmail(composeTo, composeSubject, composeBody)}
+                  disabled={!composeTo || !composeSubject || !composeBody || sendEmail.isPending}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-l-lg transition cursor-pointer flex items-center gap-1 disabled:opacity-50 border-r border-indigo-500/20"
+                >
+                  <span>Send</span>
+                  <Send size={10} />
+                </button>
+                <button
+                  onClick={() => setShowSendLaterDropdown(!showSendLaterDropdown)}
+                  disabled={!composeTo || !composeSubject || !composeBody}
+                  className="px-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg transition cursor-pointer flex items-center justify-center disabled:opacity-50"
+                  title="Schedule Send"
+                >
+                  <Clock size={12} />
+                </button>
+
+                {showSendLaterDropdown && (
+                  <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-2">
+                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Schedule Send</div>
+                    <button
+                      onClick={() => {
+                        const d = new Date();
+                        d.setHours(d.getHours() + 1);
+                        triggerSendEmail(composeTo, composeSubject, composeBody, d);
+                        setShowSendLaterDropdown(false);
+                      }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
+                    >
+                      <span>In 1 hour</span>
+                      <span className="text-[10px] text-zinc-550">
+                        {new Date(Date.now() + 3600 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 1);
+                        d.setHours(8, 0, 0, 0);
+                        triggerSendEmail(composeTo, composeSubject, composeBody, d);
+                        setShowSendLaterDropdown(false);
+                      }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
+                    >
+                      <span>Tomorrow morning</span>
+                      <span className="text-[10px] text-zinc-550">8:00 AM</span>
+                    </button>
+                    <div className="border-t border-zinc-900 my-1" />
+                    <div className="px-1 space-y-1">
+                      <label className="block text-[9px] text-zinc-500 font-semibold">Custom date & time</label>
+                      <input
+                        type="datetime-local"
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const d = new Date(e.target.value);
+                            triggerSendEmail(composeTo, composeSubject, composeBody, d);
+                            setShowSendLaterDropdown(false);
+                          }
+                        }}
+                        className="w-full px-2 py-1 bg-zinc-900 border border-zinc-850 rounded text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1013,16 +1471,39 @@ export function Dashboard() {
 function SettingsView() {
   const { data: session } = useSession();
   const utils = api.useUtils();
+  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "automations" | "developer" | "suppression">("general");
   const [inviteEmail, setInviteEmail] = useState("");
   const [referralCodeInput, setReferralCodeInput] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [exporting, setExporting] = useState(false);
 
+  // Scheduling states
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkSlug, setLinkSlug] = useState("");
+  const [linkDuration, setLinkDuration] = useState(30);
+  const [linkBuffer, setLinkBuffer] = useState(0);
+
+  // VIP Contacts states
+  const [vipSearch, setVipSearch] = useState("");
+  const [newVipEmail, setNewVipEmail] = useState("");
+  const [newVipName, setNewVipName] = useState("");
+
+  // Org states
+  const [orgInviteEmail, setOrgInviteEmail] = useState("");
+  const [orgInviteRole, setOrgInviteRole] = useState<"admin" | "member">("member");
+  const [newOrgName, setNewOrgName] = useState("");
+
   // Queries
   const { data: sub } = api.billing.getSubscription.useQuery();
   const { data: refStats, refetch: refetchRefStats } = api.referral.getReferralStats.useQuery();
   const { data: userProfile } = api.auth.me.useQuery();
+  const { data: links, refetch: refetchLinks } = api.scheduling.listLinks.useQuery();
+  const { data: contactsData, refetch: refetchContacts } = api.contacts.listContacts.useQuery({
+    searchQuery: vipSearch,
+  });
+  const { data: activeOrg, refetch: refetchOrg } = api.org.getOrg.useQuery();
+  const { data: orgMembersList, refetch: refetchMembers } = api.org.listMembers.useQuery();
 
   // Prefill referral code if present in localStorage
   useEffect(() => {
@@ -1035,6 +1516,104 @@ function SettingsView() {
   }, [refStats]);
 
   // Mutations
+  const createLink = api.scheduling.createLink.useMutation({
+    onSuccess: () => {
+      toast.success("Scheduling link created!");
+      setLinkTitle("");
+      setLinkSlug("");
+      setLinkDuration(30);
+      setLinkBuffer(0);
+      void refetchLinks();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to create scheduling link.");
+    },
+  });
+
+  const toggleLink = api.scheduling.toggleLink.useMutation({
+    onSuccess: () => {
+      toast.success("Link status updated!");
+      void refetchLinks();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to update link status.");
+    },
+  });
+
+  const addVipContact = api.contacts.addContact.useMutation({
+    onSuccess: () => {
+      toast.success("VIP contact added!");
+      setNewVipEmail("");
+      setNewVipName("");
+      void refetchContacts();
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to add VIP contact.");
+    },
+  });
+
+  const toggleVipContact = api.contacts.toggleVip.useMutation({
+    onSuccess: () => {
+      toast.success("VIP status updated!");
+      void refetchContacts();
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to toggle VIP status.");
+    },
+  });
+
+  const inviteOrgMember = api.org.inviteMember.useMutation({
+    onSuccess: () => {
+      toast.success("Member invited successfully!");
+      setOrgInviteEmail("");
+      void refetchMembers();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to invite member.");
+    },
+  });
+
+  const updateMemberRole = api.org.updateMemberRole.useMutation({
+    onSuccess: () => {
+      toast.success("Member role updated!");
+      void refetchMembers();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to update member role.");
+    },
+  });
+
+  const removeOrgMember = api.org.removeMember.useMutation({
+    onSuccess: () => {
+      toast.success("Member removed from team!");
+      void refetchMembers();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to remove member.");
+    },
+  });
+
+  const updateOrgName = api.org.updateOrgName.useMutation({
+    onSuccess: () => {
+      toast.success("Organization name updated!");
+      void refetchOrg();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to update organization name.");
+    },
+  });
+
+  const handleCreateLink = () => {
+    createLink.mutate({
+      title: linkTitle,
+      slug: linkSlug,
+      durationMins: linkDuration,
+      bufferMins: linkBuffer,
+    });
+  };
+
   const updateSettings = api.auth.updateSettings.useMutation({
     onSuccess: () => {
       toast.success("Settings updated successfully!");
@@ -1143,8 +1722,52 @@ function SettingsView() {
         <p className="text-zinc-500 text-xs">Manage subscriptions, referrals, security compliance, and privacy controls.</p>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+      {/* Sub tabs */}
+      <div className="flex border-b border-zinc-900 gap-6 text-sm font-medium">
+        <button
+          onClick={() => setSettingsSubTab("general")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "general"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          General Settings
+        </button>
+        <button
+          onClick={() => setSettingsSubTab("automations")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "automations"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Rules & Automations
+        </button>
+        <button
+          onClick={() => setSettingsSubTab("developer")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "developer"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Developer API & Webhooks
+        </button>
+        <button
+          onClick={() => setSettingsSubTab("suppression")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "suppression"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Suppression List
+        </button>
+      </div>
+
+      {settingsSubTab === "general" && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
         {/* Left column: Growth & Referrals */}
         <div className="space-y-8">
           <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md relative overflow-hidden">
@@ -1263,10 +1886,331 @@ function SettingsView() {
               )}
             </div>
           </div>
+
+          {/* Scheduling Links Card */}
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
+              <CalendarIcon size={16} className="text-indigo-400" />
+              Scheduling & Booking Links
+            </h3>
+            <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+              Create and share booking links so contacts can schedule meetings directly over your calendar slots.
+            </p>
+
+            {/* Link Creation Form */}
+            <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 space-y-4 mb-6 text-left">
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Create New Link</span>
+              <div className="grid grid-cols-2 gap-3 mt-1">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 30 Min Sync"
+                    value={linkTitle}
+                    onChange={(e) => setLinkTitle(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-205 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Slug</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 30min"
+                    value={linkSlug}
+                    onChange={(e) => setLinkSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-205 font-mono placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Duration (Mins)</label>
+                  <input
+                    type="number"
+                    min={5}
+                    value={linkDuration}
+                    onChange={(e) => setLinkDuration(Number(e.target.value))}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-205 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Buffer (Mins)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={linkBuffer}
+                    onChange={(e) => setLinkBuffer(Number(e.target.value))}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-205 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleCreateLink}
+                disabled={!linkTitle || !linkSlug || createLink.isPending}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+              >
+                {createLink.isPending ? "Creating..." : "Create Booking Link"}
+              </button>
+            </div>
+
+            {/* List of links */}
+            <div>
+              <h4 className="text-xs font-semibold text-zinc-400 mb-2">Your Active Links</h4>
+              {!links || links.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 italic text-left">No scheduling links configured.</p>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                  {links.map((link) => (
+                    <div key={link.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
+                      <div className="min-w-0 text-left">
+                        <div className="text-xs font-bold text-zinc-250 truncate">{link.title}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate select-all">
+                          {`${typeof window !== "undefined" ? window.location.origin : ""}/book/${link.slug}`}
+                        </div>
+                        <div className="text-[9px] text-zinc-400 mt-1">
+                          {link.durationMins}m duration · {link.bufferMins}m buffer
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => toggleLink.mutate({ id: link.id, isActive: !link.isActive })}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
+                            link.isActive
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}
+                        >
+                          {link.isActive ? "Active" : "Paused"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* VIP Contacts Card */}
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md relative overflow-hidden mt-8">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+            <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
+              <Sparkles size={16} className="text-amber-400" />
+              VIP Senders & Contacts
+            </h3>
+            <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+              Mark key clients, stakeholders, or users as VIPs to highlight their emails in the VIP inbox tab.
+            </p>
+
+            {/* VIP Search / Add Form */}
+            <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 space-y-4 mb-6 text-left">
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Add VIP Contact</span>
+              <div className="grid grid-cols-2 gap-3 mt-1">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="partner@company.com"
+                    value={newVipEmail}
+                    onChange={(e) => setNewVipEmail(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Name (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="John Doe"
+                    value={newVipName}
+                    onChange={(e) => setNewVipName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500 transition"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => addVipContact.mutate({ email: newVipEmail, name: newVipName, isVip: true })}
+                disabled={!newVipEmail || addVipContact.isPending}
+                className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+              >
+                {addVipContact.isPending ? "Adding..." : "Add VIP Contact"}
+              </button>
+            </div>
+
+            {/* List and search */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-xs font-semibold text-zinc-400">Manage VIPs</h4>
+                <input
+                  type="text"
+                  placeholder="Search contacts..."
+                  value={vipSearch}
+                  onChange={(e) => setVipSearch(e.target.value)}
+                  className="px-2 py-1 bg-zinc-950 border border-zinc-855 rounded text-[11px] text-zinc-300 placeholder:text-zinc-650 focus:outline-none focus:border-amber-500 transition w-32"
+                />
+              </div>
+
+              {!contactsData || contactsData.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 italic text-left">No contacts found.</p>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                  {contactsData.map((contact) => (
+                    <div key={contact.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
+                      <div className="min-w-0 text-left">
+                        <div className="text-xs font-bold text-zinc-200 truncate">{contact.name || contact.email}</div>
+                        {contact.name && (
+                          <div className="text-[10px] text-zinc-550 truncate mt-0.5">{contact.email}</div>
+                        )}
+                        <div className="text-[9px] text-zinc-450 mt-1">
+                          {contact.interactionCount} interactions
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => toggleVipContact.mutate({ email: contact.email, isVip: !contact.isVip })}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
+                            contact.isVip
+                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}
+                        >
+                          {contact.isVip ? "VIP" : "Regular"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right column: Subscription & Data Policy */}
         <div className="space-y-8">
+          {/* Organization & Team Settings Card */}
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
+              <Plus size={16} className="text-indigo-400" />
+              Organization & Team Settings
+            </h3>
+            <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+              Manage your company or workspace organization settings and invite team members to collaborate.
+            </p>
+
+            {/* Active Org Name Form */}
+            {activeOrg && (
+              <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 mb-6 text-left space-y-3">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Workspace Name</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Workspace Name"
+                    defaultValue={activeOrg.name}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                  {(activeOrg.role === "owner" || activeOrg.role === "admin") && (
+                    <button
+                      onClick={() => updateOrgName.mutate({ name: newOrgName || activeOrg.name })}
+                      disabled={updateOrgName.isPending}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      Save
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10px] text-zinc-500 mt-1">
+                  Your Role: <span className="font-semibold text-zinc-350 capitalize">{activeOrg.role}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Team Members List */}
+            <div className="space-y-4 mb-6">
+              <h4 className="text-xs font-semibold text-zinc-400 text-left">Team Members</h4>
+              {!orgMembersList || orgMembersList.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 italic text-left">No team members found.</p>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                  {orgMembersList.map((member) => (
+                    <div key={member.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
+                      <div className="min-w-0 text-left">
+                        <div className="text-xs font-bold text-zinc-200 truncate">{member.name || member.email}</div>
+                        <div className="text-[10px] text-zinc-550 truncate mt-0.5">{member.email}</div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {member.role === "owner" ? (
+                          <span className="px-2 py-0.5 text-[9px] bg-zinc-800 text-zinc-400 border border-zinc-700 rounded capitalize font-medium">
+                            Owner
+                          </span>
+                        ) : (activeOrg?.role === "owner" || activeOrg?.role === "admin") ? (
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={member.role}
+                              onChange={(e) => updateMemberRole.mutate({ memberId: member.id, role: e.target.value as any })}
+                              className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-[10px] text-zinc-300 focus:outline-none"
+                            >
+                              <option value="member">Member</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <button
+                              onClick={() => removeOrgMember.mutate({ memberId: member.id })}
+                              className="text-rose-400 hover:text-rose-300 p-0.5 transition cursor-pointer"
+                              title="Remove member"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[9px] bg-zinc-900 text-zinc-400 rounded capitalize font-medium">
+                            {member.role}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Invite New Team Member Form */}
+            {(activeOrg?.role === "owner" || activeOrg?.role === "admin") && (
+              <div className="p-4 rounded-xl border border-zinc-855 bg-zinc-950/40 space-y-4 text-left">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Invite Member</span>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Email</label>
+                    <input
+                      type="email"
+                      placeholder="colleague@company.com"
+                      value={orgInviteEmail}
+                      onChange={(e) => setOrgInviteEmail(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 placeholder:text-zinc-550 focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Role</label>
+                    <select
+                      value={orgInviteRole}
+                      onChange={(e) => setOrgInviteRole(e.target.value as any)}
+                      className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-300 focus:outline-none"
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  onClick={() => inviteOrgMember.mutate({ email: orgInviteEmail, role: orgInviteRole })}
+                  disabled={!orgInviteEmail || inviteOrgMember.isPending}
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+                >
+                  {inviteOrgMember.isPending ? "Sending..." : "Send Invite"}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Subscription Card */}
           <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md">
             <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
@@ -1409,6 +2353,11 @@ function SettingsView() {
           </div>
         </div>
       </div>
+      )}
+
+      {settingsSubTab === "automations" && <AutomationsSettingsView />}
+      {settingsSubTab === "developer" && <DeveloperSettingsView />}
+      {settingsSubTab === "suppression" && <SuppressionListSettingsView />}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmOpen && (
@@ -1458,4 +2407,188 @@ function SettingsView() {
 
 function LoaderIcon() {
   return <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />;
+}
+
+function TicketsView({
+  onOpenMessage,
+}: {
+  onOpenMessage: (messageId: string) => void;
+}) {
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
+  const { data: ticketsData, isLoading: ticketsLoading, refetch: refetchTickets } = api.tickets.listTickets.useQuery();
+  const { data: teamMembers } = api.org.listMembers.useQuery();
+
+  const updateStatus = api.tickets.updateTicketStatus.useMutation({
+    onSuccess: () => {
+      toast.success("Ticket status updated!");
+      void refetchTickets();
+    },
+    onError: (err) => toast.error(err.message || "Failed to update status."),
+  });
+
+  const assignTicket = api.tickets.assignTicket.useMutation({
+    onSuccess: () => {
+      toast.success("Ticket assignee updated!");
+      void refetchTickets();
+    },
+    onError: (err) => toast.error(err.message || "Failed to assign ticket."),
+  });
+
+  const selectedTicket = useMemo(() => {
+    return ticketsData?.find((t) => t.id === selectedTicketId) || null;
+  }, [ticketsData, selectedTicketId]);
+
+  return (
+    <section className="flex-1 flex h-full overflow-hidden">
+      {/* Ticket List Pane */}
+      <div className="w-96 border-r border-zinc-900 flex flex-col bg-zinc-950/20 backdrop-blur-md">
+        <div className="p-6 border-b border-zinc-900 flex justify-between items-center">
+          <h2 className="text-lg font-bold text-white">Support Tickets</h2>
+          <button
+            onClick={() => void refetchTickets()}
+            className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto divide-y divide-zinc-900/60">
+          {ticketsLoading ? (
+            <div className="p-6 text-zinc-500 text-xs text-center">Loading tickets...</div>
+          ) : !ticketsData || ticketsData.length === 0 ? (
+            <div className="p-6 text-zinc-500 text-xs text-center">No support tickets found.</div>
+          ) : (
+            ticketsData.map((ticket) => (
+              <button
+                key={ticket.id}
+                onClick={() => setSelectedTicketId(ticket.id)}
+                className={`w-full p-4 flex flex-col gap-1.5 transition text-left cursor-pointer ${
+                  selectedTicketId === ticket.id ? "bg-zinc-900/40" : "hover:bg-zinc-900/10"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
+                    {ticket.publicId}
+                  </span>
+                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded uppercase ${
+                    ticket.status === "open"
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : ticket.status === "pending"
+                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+                  }`}>
+                    {ticket.status}
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-zinc-200 truncate">{ticket.subject}</div>
+                <div className="text-[10px] text-zinc-400 truncate">From: {ticket.fromName || ticket.fromEmail}</div>
+                <div className="text-[9px] text-zinc-500 truncate mt-1">
+                  {ticket.assignedUser ? `Assigned to: ${ticket.assignedUser.name}` : "Unassigned"}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Ticket Reading / Actions Pane */}
+      <div className="flex-1 flex flex-col bg-zinc-950/40 backdrop-blur-md overflow-hidden">
+        {!selectedTicket ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-zinc-650 text-center">
+            <HelpCircle size={32} className="mb-3 text-zinc-750" />
+            <h3 className="text-sm font-semibold text-zinc-300 mb-1">No ticket selected</h3>
+            <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+              Select a ticket from the left panel to manage status, assignments, and view conversations.
+            </p>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col h-full overflow-hidden text-left">
+            {/* Header */}
+            <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 px-2 py-0.5 rounded">
+                    {selectedTicket.publicId}
+                  </span>
+                  <span className="text-zinc-500 text-xs">
+                    {new Date(selectedTicket.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <h2 className="text-lg font-bold text-white">{selectedTicket.subject}</h2>
+                <div className="text-xs text-zinc-400 mt-2">
+                  <span className="text-zinc-550 font-medium">Customer: </span>
+                  {selectedTicket.fromName ? `${selectedTicket.fromName} (${selectedTicket.fromEmail})` : selectedTicket.fromEmail}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Panel */}
+            <div className="p-6 border-b border-zinc-900 grid grid-cols-2 gap-4 bg-zinc-950/20">
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Ticket Status</label>
+                <select
+                  value={selectedTicket.status}
+                  onChange={(e) => updateStatus.mutate({ id: selectedTicket.id, status: e.target.value as any })}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
+                >
+                  <option value="open">Open</option>
+                  <option value="pending">Pending</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Assignee</label>
+                <select
+                  value={selectedTicket.assignedUserId ?? ""}
+                  onChange={(e) => assignTicket.mutate({ id: selectedTicket.id, userId: e.target.value || null })}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
+                >
+                  <option value="">Unassigned</option>
+                  {teamMembers?.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name} ({member.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Details & Conversation Link */}
+            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Ticket Description (Snippet)</h4>
+                <div className="p-4 rounded-xl border border-zinc-900 bg-zinc-950/30 text-xs text-zinc-300 leading-relaxed italic">
+                  &quot;{selectedTicket.snippet || "No description provided."}&quot;
+                </div>
+              </div>
+
+              {selectedTicket.gmailMessageId && (
+                <div className="p-4 rounded-xl border border-indigo-500/10 bg-indigo-500/5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-indigo-400" />
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Superhuman Email Client Integration</span>
+                  </div>
+                  <p className="text-zinc-400 text-xs leading-relaxed">
+                    This support ticket is linked directly to an active email thread in your inbox. Open it to write an AI-powered reply, snooze, or archive the thread.
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (selectedTicket.gmailMessageId) {
+                        onOpenMessage(selectedTicket.gmailMessageId);
+                      }
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Mail size={12} />
+                    <span>Open Email Conversation</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }

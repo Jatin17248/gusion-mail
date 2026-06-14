@@ -50,4 +50,42 @@ export const contactsRouter = createTRPCRouter({
 
       return updated;
     }),
+
+  addContact: protectedProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        name: z.string().optional(),
+        isVip: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await db.query.contacts.findFirst({
+        where: and(
+          eq(contacts.email, input.email),
+          eq(contacts.userId, ctx.session.user.id)
+        ),
+      });
+      if (existing) {
+        const [updated] = await db
+          .update(contacts)
+          .set({
+            isVip: input.isVip,
+            name: input.name ?? existing.name,
+          })
+          .where(eq(contacts.id, existing.id))
+          .returning();
+        return updated;
+      }
+      const [inserted] = await db
+        .insert(contacts)
+        .values({
+          userId: ctx.session.user.id,
+          email: input.email,
+          name: input.name ?? null,
+          isVip: input.isVip,
+        })
+        .returning();
+      return inserted;
+    }),
 });
