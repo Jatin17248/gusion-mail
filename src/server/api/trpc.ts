@@ -76,6 +76,8 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const createTRPCRouter = t.router;
 
+import { logger } from "@/server/lib/logger";
+
 /**
  * Middleware for timing procedure execution and adding an artificial delay in development.
  *
@@ -94,7 +96,7 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   const result = await next();
 
   const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  logger.info(`[TRPC] ${path} executed`, { durationMs: end - start });
 
   return result;
 });

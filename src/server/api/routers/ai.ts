@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { hasActivePlanOrTrial } from "@/server/lib/plan-gate";
+import { trackEvent } from "@/lib/analytics";
 import { google } from "@ai-sdk/google";
 import { generateText, generateObject } from "ai";
 import { getTenant } from "@/server/lib/tenant";
@@ -30,6 +31,7 @@ export const aiRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await verifyPremium(ctx.session.user.id);
+      trackEvent(ctx.session.user.id, "ai_compose_triggered", { promptLength: input.prompt.length });
 
       const systemPrompt = `You are an expert AI email writer. Write a clear, concise, and professional email body based on the instructions.
 Do NOT output subject lines, headers, or signatures unless requested. Just write the email body.
@@ -49,6 +51,7 @@ ${input.styleContext ? `Writing Style / Context: ${input.styleContext}` : ""}`;
     .input(z.object({ messageId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await verifyPremium(ctx.session.user.id);
+      trackEvent(ctx.session.user.id, "ai_smart_reply_triggered", { messageId: input.messageId });
 
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       const dbMessage = await tenant.gmail.db.messages.findByEntityId(input.messageId);
@@ -92,6 +95,7 @@ Ensure that the reply drafts match the language and address the key points in th
     .input(z.object({ threadId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await verifyPremium(ctx.session.user.id);
+      trackEvent(ctx.session.user.id, "ai_summarize_triggered", { threadId: input.threadId });
 
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       // Fetch thread messages
@@ -136,6 +140,7 @@ Ensure that the reply drafts match the language and address the key points in th
 
   aiDailyBrief: protectedProcedure.query(async ({ ctx }) => {
     await verifyPremium(ctx.session.user.id);
+    trackEvent(ctx.session.user.id, "ai_daily_brief_triggered");
 
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const highPriorityMetas = await db.query.emailMeta.findMany({

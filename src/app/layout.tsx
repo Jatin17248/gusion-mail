@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: "Gusion Mail — AI Command Center",
   description: "Keyboard-first Gmail & Calendar command center powered by AI.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({

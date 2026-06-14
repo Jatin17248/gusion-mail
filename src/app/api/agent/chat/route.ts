@@ -5,6 +5,7 @@ import { auth } from "@/server/auth";
 import { getTenant } from "@/server/lib/tenant";
 import { db } from "@/server/db";
 import { agentMessages } from "@/server/db/schema";
+import { trackEvent } from "@/lib/analytics";
 
 interface CorsairMessage {
   entity_id: string;
@@ -61,6 +62,8 @@ export async function POST(req: Request) {
       content: textContent,
       createdAt: new Date(),
     });
+
+    trackEvent(session.user.id, "agent_chat_sent", { messageLength: textContent.length });
   }
 
   const tenant = getTenant(session.user.corsairTenantId);

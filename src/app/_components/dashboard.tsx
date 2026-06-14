@@ -29,6 +29,11 @@ import {
   X,
   Trash2,
   Sparkles,
+  Settings,
+  Copy,
+  Download,
+  ExternalLink,
+  Lock,
 } from "lucide-react";
 
 
@@ -36,7 +41,7 @@ import {
 export function Dashboard() {
   const { data: session } = useSession();
   const utils = api.useUtils();
-  const [activeTab, setActiveTab] = useState<"gmail" | "calendar">("gmail");
+  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "settings">("gmail");
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -303,6 +308,7 @@ export function Dashboard() {
     },
     "g i": () => setActiveTab("gmail"),
     "g c": () => setActiveTab("calendar"),
+    "g s": () => setActiveTab("settings"),
     "?": () => setShortcutHelpOpen((prev) => !prev),
     "Cmd+K": (e) => {
       e.preventDefault();
@@ -327,6 +333,9 @@ export function Dashboard() {
         break;
       case "calendar":
         setActiveTab("calendar");
+        break;
+      case "settings":
+        setActiveTab("settings");
         break;
       case "agent":
         setAgentOpen(true);
@@ -388,7 +397,9 @@ export function Dashboard() {
               <span>Calendar</span>
             </button>
             <button
-              onClick={() => setAgentOpen(!agentOpen)}
+              onClick={() => {
+                setAgentOpen(!agentOpen);
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
                 agentOpen
                   ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
@@ -397,6 +408,20 @@ export function Dashboard() {
             >
               <Sparkles size={16} />
               <span>AI Agent</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("settings");
+                setAgentOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
+                activeTab === "settings"
+                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+              }`}
+            >
+              <Settings size={16} />
+              <span>Settings</span>
             </button>
           </nav>
         </div>
@@ -441,7 +466,7 @@ export function Dashboard() {
 
       {/* Main workspace (tabs) */}
       <div className="flex-1 flex overflow-hidden">
-        {activeTab === "gmail" ? (
+        {activeTab === "gmail" && (
           <>
             {/* 2nd Pane: Email List */}
             <section className="w-[420px] flex-shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
@@ -623,7 +648,9 @@ export function Dashboard() {
               )}
             </section>
           </>
-        ) : (
+        )}
+
+        {activeTab === "calendar" && (
           /* Calendar Main View */
           <section className="flex-1 flex flex-col bg-zinc-950">
             {/* Calendar Header */}
@@ -727,6 +754,8 @@ export function Dashboard() {
             </div>
           </section>
         )}
+
+        {activeTab === "settings" && <SettingsView />}
       </div>
 
       {/* Floating help / keyboard overlay trigger */}
@@ -978,6 +1007,452 @@ export function Dashboard() {
         onClose={() => setAgentOpen(false)}
       />
     </div>
+  );
+}
+
+function SettingsView() {
+  const { data: session } = useSession();
+  const utils = api.useUtils();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [referralCodeInput, setReferralCodeInput] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  // Queries
+  const { data: sub } = api.billing.getSubscription.useQuery();
+  const { data: refStats, refetch: refetchRefStats } = api.referral.getReferralStats.useQuery();
+  const { data: userProfile } = api.auth.me.useQuery();
+
+  // Prefill referral code if present in localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && !refStats?.referredByCode) {
+      const stored = localStorage.getItem("gusion_referral_code");
+      if (stored) {
+        setReferralCodeInput(stored);
+      }
+    }
+  }, [refStats]);
+
+  // Mutations
+  const updateSettings = api.auth.updateSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Settings updated successfully!");
+      void utils.auth.me.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to update settings.");
+    },
+  });
+
+  const submitInvite = api.referral.submitReferral.useMutation({
+    onSuccess: () => {
+      toast.success("Invitation sent successfully!");
+      setInviteEmail("");
+      void refetchRefStats();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to send invitation.");
+    },
+  });
+
+  const applyCode = api.referral.applyReferralCode.useMutation({
+    onSuccess: () => {
+      toast.success("Referral code applied! 30 days added to your trial.");
+      setReferralCodeInput("");
+      void refetchRefStats();
+      void utils.billing.getSubscription.invalidate();
+      void utils.auth.me.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to apply referral code.");
+    },
+  });
+
+  const checkoutSession = api.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => {
+      if (res.url) window.location.href = res.url;
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to initiate checkout.");
+    },
+  });
+
+  const portalSession = api.billing.createPortalSession.useMutation({
+    onSuccess: (res) => {
+      if (res.url) window.location.href = res.url;
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to open billing portal.");
+    },
+  });
+
+  const deleteAccount = api.auth.deleteAccount.useMutation({
+    onSuccess: () => {
+      toast.success("Account deleted successfully.");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete account.");
+    },
+  });
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await utils.auth.exportData.fetch();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `gusion-mail-export-${session?.user?.id ?? "data"}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Data exported successfully!");
+    } catch {
+      toast.error("Failed to export data.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleCopyCode = () => {
+    if (refStats?.referralCode) {
+      void navigator.clipboard.writeText(refStats.referralCode);
+      toast.success("Referral code copied to clipboard!");
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (refStats?.referralCode) {
+      const link = `${window.location.origin}/?ref=${refStats.referralCode}`;
+      void navigator.clipboard.writeText(link);
+      toast.success("Referral link copied to clipboard!");
+    }
+  };
+
+  const isSubscribed = sub?.plan && sub.plan !== "free" && sub.status === "active";
+
+  return (
+    <section className="flex-1 flex flex-col bg-zinc-950 overflow-y-auto p-6 md:p-8 space-y-8">
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-bold text-white mb-1">Settings & Account Control</h2>
+        <p className="text-zinc-500 text-xs">Manage subscriptions, referrals, security compliance, and privacy controls.</p>
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+        {/* Left column: Growth & Referrals */}
+        <div className="space-y-8">
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
+              <Sparkles size={16} className="text-indigo-400" />
+              Refer & Earn Extensions
+            </h3>
+            <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+              Invite friends to try Gusion Mail. When they sign up, both of you will receive an extra <span className="text-indigo-400 font-semibold">30 days</span> on your free trial!
+            </p>
+
+            {/* Referral code display */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 flex flex-col justify-between">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Your Code</span>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="font-mono text-sm font-bold text-white tracking-wider">{refStats?.referralCode ?? "..."}</span>
+                  <button
+                    onClick={handleCopyCode}
+                    className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition cursor-pointer"
+                    title="Copy Code"
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 flex flex-col justify-between">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Share Link</span>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs text-zinc-400 truncate max-w-[80px]">gusion-mail.com/?ref=...</span>
+                  <button
+                    onClick={handleCopyLink}
+                    className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition cursor-pointer"
+                    title="Copy Link"
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Input to send invite */}
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Invite a Friend by Email</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="friend@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={() => submitInvite.mutate({ email: inviteEmail })}
+                    disabled={!inviteEmail || submitInvite.isPending}
+                    className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50 cursor-pointer"
+                  >
+                    Send Invite
+                  </button>
+                </div>
+              </div>
+
+              {/* Input to apply a referral code */}
+              {!refStats?.referredByCode ? (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Were you referred? Enter Code</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="ENTER-FRIENDS-CODE"
+                      value={referralCodeInput}
+                      onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-sm text-zinc-200 font-mono tracking-wider focus:outline-none focus:border-indigo-500 transition focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <button
+                      onClick={() => applyCode.mutate({ code: referralCodeInput })}
+                      disabled={!referralCodeInput || applyCode.isPending}
+                      className="px-4 py-2 text-xs font-semibold bg-zinc-900 hover:bg-zinc-855 border border-zinc-800 text-zinc-200 rounded-lg transition disabled:opacity-50 cursor-pointer"
+                    >
+                      Apply Code
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg border border-emerald-500/10 bg-emerald-500/5 text-emerald-400/90 text-xs font-medium">
+                  ✓ Referral code applied: you were referred by <span className="font-mono font-bold">{refStats.referredByCode}</span>
+                </div>
+              )}
+            </div>
+
+            {/* List of Sent Invites */}
+            <div>
+              <h4 className="text-xs font-semibold text-zinc-400 mb-2">Your Sent Invites</h4>
+              {!refStats?.invites || refStats.invites.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 italic">No invites sent yet.</p>
+              ) : (
+                <div className="max-h-[150px] overflow-y-auto border border-zinc-855 rounded-lg divide-y divide-zinc-900">
+                  {refStats.invites.map((invite) => (
+                    <div key={invite.id} className="p-2.5 flex items-center justify-between text-xs bg-zinc-950/20">
+                      <span className="text-zinc-300 font-medium truncate max-w-[180px]">{invite.referredEmail}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          invite.status === "rewarded"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-zinc-800 text-zinc-400"
+                        }`}>
+                          {invite.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: Subscription & Data Policy */}
+        <div className="space-y-8">
+          {/* Subscription Card */}
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md">
+            <h3 className="text-md font-bold text-zinc-200 mb-2 flex flex-row items-center gap-2">
+              <Settings size={16} className="text-zinc-400" />
+              Subscription & Plan
+            </h3>
+            <p className="text-zinc-400 text-xs mb-6">
+              You are currently on the <span className="text-white font-semibold capitalize">{sub?.plan ?? "free"}</span> plan.
+            </p>
+
+            <div className="p-4 rounded-xl border border-zinc-855 bg-zinc-950/40 space-y-4 mb-6">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500 font-medium">Trial Period Status</span>
+                <span className="text-zinc-300 font-semibold">
+                  {sub?.trialDaysRemaining ?? 14} days remaining
+                </span>
+              </div>
+              <div className="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-1.5 rounded-full animate-pulse"
+                  style={{ width: `${Math.min(100, Math.max(0, ((sub?.trialDaysRemaining ?? 14) / 14) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {isSubscribed ? (
+              <button
+                onClick={() => portalSession.mutate()}
+                disabled={portalSession.isPending}
+                className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-855 border border-zinc-800 text-zinc-200 font-medium rounded-xl text-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {portalSession.isPending ? "Loading..." : "Manage Billing Portal"}
+              </button>
+            ) : (
+              <button
+                onClick={() => checkoutSession.mutate({ priceId: "price_mock_premium" })}
+                disabled={checkoutSession.isPending}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {checkoutSession.isPending ? "Processing..." : "Upgrade to Premium ($20/mo)"}
+              </button>
+            )}
+          </div>
+
+            {/* Privacy & Compliance Card */}
+          <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md space-y-6">
+            <h3 className="text-md font-bold text-zinc-200 flex flex-row items-center gap-2">
+              <Lock size={16} className="text-rose-400" />
+              Security & Privacy Compliance
+            </h3>
+
+            {/* Viral Signature Toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-zinc-300">Viral Email Signature</h4>
+                  <p className="text-zinc-500 text-[11px] leading-relaxed max-w-[85%] mt-1">
+                    Automatically append a sleek brand signature to outgoing emails to earn referral credits when friends sign up.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !(userProfile?.viralSignatureEnabled ?? true);
+                    updateSettings.mutate({ viralSignatureEnabled: nextVal });
+                  }}
+                  disabled={updateSettings.isPending}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                    (userProfile?.viralSignatureEnabled ?? true) ? "bg-indigo-600" : "bg-zinc-800"
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      (userProfile?.viralSignatureEnabled ?? true) ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 font-mono text-[10px] text-zinc-400 select-none">
+                <span className="text-zinc-500">Preview:</span>
+                <div className="mt-1 whitespace-pre">
+                  {"--\nSent with Gusion Mail - https://mail.gusion.in"}
+                </div>
+              </div>
+            </div>
+
+            {/* Export data */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-zinc-300">Export Personal Data</h4>
+              <p className="text-zinc-500 text-[11px] leading-relaxed">
+                Download a complete payload of all your stored data, templates, bookings, scheduling links, and email metadata.
+              </p>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-1 px-4 py-2 border border-zinc-855 hover:bg-zinc-900 text-zinc-300 rounded-lg text-xs transition font-semibold cursor-pointer disabled:opacity-50"
+              >
+                <Download size={13} />
+                <span>{exporting ? "Compiling export..." : "Export Data (JSON)"}</span>
+              </button>
+            </div>
+
+            {/* Delete Account */}
+            <div className="space-y-2 border-t border-zinc-900 pt-6">
+              <h4 className="text-xs font-semibold text-rose-400">Permanently Delete Account</h4>
+              <p className="text-zinc-500 text-[11px] leading-relaxed">
+                Permanently purge your account, revoke Google scopes, and wipe your data from the sandbox. This action is irreversible.
+              </p>
+              <button
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="flex items-center gap-1 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-semibold transition cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete Account</span>
+              </button>
+            </div>
+
+            {/* Legal Links */}
+            <div className="border-t border-zinc-900 pt-6 flex gap-4 text-xs font-medium text-zinc-500">
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-zinc-300 flex items-center gap-1 transition"
+              >
+                <span>Privacy Policy</span>
+                <ExternalLink size={10} />
+              </a>
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-zinc-300 flex items-center gap-1 transition"
+              >
+                <span>Terms of Service</span>
+                <ExternalLink size={10} />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-sm">
+          <div className="w-full max-w-md p-6 rounded-2xl border border-zinc-900 bg-zinc-900 shadow-2xl relative space-y-4">
+            <h3 className="text-md font-bold text-rose-400">Permanently Delete Account?</h3>
+            <p className="text-zinc-400 text-xs leading-relaxed">
+              This will completely wipe your local mail sync cache, delete calendar references, and revoke all Google credentials.
+            </p>
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                Type &quot;delete my account permanently&quot; to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-rose-500 transition"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setDeleteConfirmText("");
+                }}
+                className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteAccount.mutate();
+                }}
+                disabled={deleteConfirmText !== "delete my account permanently" || deleteAccount.isPending}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteAccount.isPending ? "Purging..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

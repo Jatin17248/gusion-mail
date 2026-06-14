@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import { Shield, Lock, CheckCircle, Loader } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 export function Onboarding() {
   const { data: session } = useSession();
@@ -20,6 +21,7 @@ export function Onboarding() {
     onSuccess: () => {
       setStatus("success");
       toast.success("Tenant provisioned successfully!");
+      trackEvent(session?.user?.id, "onboarding_completed");
       // Reload window so useSession updates and routes to dashboard
       setTimeout(() => {
         window.location.reload();

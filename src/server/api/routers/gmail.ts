@@ -14,6 +14,9 @@ import {
 } from "@/server/lib/corsair-entities";
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
+import { db } from "@/server/db";
+import { users } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
 
 const paginationSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
@@ -276,8 +279,19 @@ export const gmailRouter = createTRPCRouter({
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Rate limit exceeded." });
       }
 
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, ctx.session.user.id),
+      });
+      const viralSignatureEnabled = user?.viralSignatureEnabled ?? true;
+      const body = viralSignatureEnabled
+        ? `${input.body}\n\n--\nSent with Gusion Mail - https://mail.gusion.in`
+        : input.body;
+
       const tenant = getTenant(ctx.session.user.corsairTenantId);
-      const raw = encodeRawEmail(input);
+      const raw = encodeRawEmail({
+        ...input,
+        body,
+      });
       const message = await tenant.gmail.api.messages.send({ raw });
 
       // Invalidate inbox cache
@@ -306,11 +320,19 @@ export const gmailRouter = createTRPCRouter({
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Rate limit exceeded." });
       }
 
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, ctx.session.user.id),
+      });
+      const viralSignatureEnabled = user?.viralSignatureEnabled ?? true;
+      const body = viralSignatureEnabled
+        ? `${input.body}\n\n--\nSent with Gusion Mail - https://mail.gusion.in`
+        : input.body;
+
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       const raw = encodeRawEmail({
         to: input.to,
         subject: input.subject.startsWith("Re: ") ? input.subject : `Re: ${input.subject}`,
-        body: input.body,
+        body,
         inReplyTo: input.inReplyTo,
         references: input.references ? `${input.references} ${input.inReplyTo}` : input.inReplyTo,
       });

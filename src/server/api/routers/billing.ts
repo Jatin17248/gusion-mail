@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { env } from "@/env";
+import { trackEvent } from "@/lib/analytics";
 
 const stripe = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : null;
 
@@ -13,6 +14,7 @@ export const billingRouter = createTRPCRouter({
   createCheckoutSession: protectedProcedure
     .input(z.object({ priceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      trackEvent(ctx.session.user.id, "stripe_checkout_initiated", { priceId: input.priceId });
       if (!stripe) {
         // Mock session in development when Stripe is not configured
         return {
@@ -60,6 +62,7 @@ export const billingRouter = createTRPCRouter({
     }),
 
   createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
+    trackEvent(ctx.session.user.id, "stripe_portal_opened");
     const sub = await db.query.subscriptions.findFirst({
       where: eq(subscriptions.userId, ctx.session.user.id),
     });

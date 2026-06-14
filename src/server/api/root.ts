@@ -8,6 +8,7 @@ import { aiRouter } from "@/server/api/routers/ai";
 import { templateRouter } from "@/server/api/routers/template";
 import { schedulingRouter } from "@/server/api/routers/scheduling";
 import { contactsRouter } from "@/server/api/routers/contacts";
+import { referralRouter } from "@/server/api/routers/referral";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   template: templateRouter,
   scheduling: schedulingRouter,
   contacts: contactsRouter,
+  referral: referralRouter,
 });
 
 // export type definition of API

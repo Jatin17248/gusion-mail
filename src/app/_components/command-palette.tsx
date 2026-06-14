@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search } from "lucide-react";
+import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings } from "lucide-react";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -134,6 +134,13 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
               >
                 <Sparkles size={16} />
                 <span>Open AI Agent (Cmd+I)</span>
+              </Command.Item>
+              <Command.Item
+                onSelect={() => { onAction("settings"); setOpen(false); }}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer hover:bg-zinc-800 hover:text-white"
+              >
+                <Settings size={16} />
+                <span>Go to Settings (g s)</span>
               </Command.Item>
             </Command.Group>
             

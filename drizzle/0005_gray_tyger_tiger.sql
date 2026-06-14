@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "viral_signature_enabled" boolean DEFAULT true;

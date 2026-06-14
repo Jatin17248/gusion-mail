@@ -19,6 +19,7 @@ export const users = pgTable("users", {
   corsairTenantId: text("corsair_tenant_id").unique(),
   gmailConnected: boolean("gmail_connected").default(false),
   calendarConnected: boolean("calendar_connected").default(false),
+  viralSignatureEnabled: boolean("viral_signature_enabled").default(true),
   onboardingCompletedAt: timestamp("onboarding_completed_at", { mode: "date" }),
   referralCode: text("referral_code").unique(),
   referredByCode: text("referred_by_code"),
@@ -224,4 +225,14 @@ export const contacts = pgTable("contacts", {
     parent: unique().on(table.userId, table.email),
   },
 ]);
+
+export const referrals = pgTable("referrals", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  referrerUserId: text("referrer_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  referredEmail: text("referred_email").notNull(),
+  status: text("status").default("pending"), // 'pending' | 'joined' | 'rewarded'
+  rewardGrantedAt: timestamp("reward_granted_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
 
