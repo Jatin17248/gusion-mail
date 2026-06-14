@@ -20,7 +20,7 @@ import { generateObject } from "ai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { env } from "@/env";
-import { appEventEmitter } from "@/server/lib/event-emitter";
+import { publishUserEvent } from "@/server/lib/realtime";
 import { getTenant } from "@/server/lib/tenant";
 import { encodeRawEmail } from "@/server/lib/email";
 
@@ -253,9 +253,11 @@ export async function POST(request: NextRequest) {
 
     console.info("Plugin Processed:", result.plugin, result.action);
 
-    // 3. AI Priority Classification for Gmail (Run asynchronously)
+    // 3. AI Priority Classification + automation for Gmail. Runs before we ack
+    // so automation actions (auto-reply, assignment) complete; Corsair retries
+    // are safe because webhook_events makes processing idempotent.
     if (result.plugin === "gmail" && user) {
-      const classifyPromise = (async () => {
+      await (async () => {
         const tenant = getTenant(tenantId);
         try {
           const messages = (await tenant.gmail.db.messages.list({ limit: 5 })) as CorsairMessage[];
@@ -554,27 +556,17 @@ Snippet: ${msg.data.snippet}`;
         }
 
         // 4. Trigger Real-time Event Push
-        appEventEmitter.emit(`update:${user.id}`, {
+        await publishUserEvent(user.id, {
           type: "inbox_update",
           message: "New email received and prioritized",
         });
       })();
-
-      if (typeof (request as any).waitUntil === "function") {
-        (request as any).waitUntil(classifyPromise);
-      }
     } else if (result.plugin === "googlecalendar" && user) {
-      const calendarPromise = (async () => {
-        // Trigger Real-time Event Push for calendar
-        appEventEmitter.emit(`update:${user.id}`, {
-          type: "calendar_update",
-          message: "Calendar updated",
-        });
-      })();
-
-      if (typeof (request as any).waitUntil === "function") {
-        (request as any).waitUntil(calendarPromise);
-      }
+      // Trigger Real-time Event Push for calendar
+      await publishUserEvent(user.id, {
+        type: "calendar_update",
+        message: "Calendar updated",
+      });
     }
 
     // Response headers handshake (e.g. secret validation)

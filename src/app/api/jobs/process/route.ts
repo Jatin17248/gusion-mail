@@ -11,7 +11,7 @@ import {
 } from "@/server/db/schema";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { getTenant } from "@/server/lib/tenant";
-import { appEventEmitter } from "@/server/lib/event-emitter";
+import { publishUserEvent } from "@/server/lib/realtime";
 import { encodeRawEmail } from "@/server/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +84,7 @@ async function processJobs() {
       results.snoozedReleased++;
 
       // Trigger realtime refresh
-      appEventEmitter.emit(`update:${meta.userId}`, {
+      await publishUserEvent(meta.userId, {
         type: "inbox_update",
         message: "Snoozed email released to inbox",
       });
@@ -126,7 +126,7 @@ async function processJobs() {
 
         results.emailsSent++;
 
-        appEventEmitter.emit(`update:${item.userId}`, {
+        await publishUserEvent(item.userId, {
           type: "inbox_update",
           message: "Scheduled email sent successfully",
         });
@@ -205,7 +205,7 @@ async function processJobs() {
 
           results.followUpsReminded++;
 
-          appEventEmitter.emit(`update:${followUp.userId}`, {
+          await publishUserEvent(followUp.userId, {
             type: "inbox_update",
             message: `Follow-up Reminder: No response to thread. Reason: ${followUp.reason ?? "Nudge"}`,
           });
@@ -255,7 +255,7 @@ async function processJobs() {
 
         results.campaignsCompleted++;
 
-        appEventEmitter.emit(`update:${campaign.userId}`, {
+        await publishUserEvent(campaign.userId, {
           type: "inbox_update",
           message: `Bulk Campaign "${campaign.name}" completed successfully.`,
         });

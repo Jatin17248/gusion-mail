@@ -1,8 +1,13 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@/server/auth";
-import { appEventEmitter } from "@/server/lib/event-emitter";
+import { getLatestUserEvent } from "@/server/lib/realtime";
 
 export const dynamic = "force-dynamic";
+// Long-lived SSE connection; the browser's EventSource auto-reconnects when the
+// serverless function reaches this limit, so updates keep flowing.
+export const maxDuration = 60;
+
+const POLL_MS = 4000;
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -15,29 +20,32 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
-      // Send initial connection successful event
       controller.enqueue(encoder.encode("data: connected\n\n"));
 
-      const onUpdate = (data: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      // Only forward events that occur after the connection opens.
+      let lastTs = Date.now();
+      let closed = false;
+
+      const tick = async () => {
+        try {
+          const event = await getLatestUserEvent(userId);
+          if (event && event.ts > lastTs) {
+            lastTs = event.ts;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } else {
+            controller.enqueue(encoder.encode("data: ping\n\n"));
+          }
+        } catch {
+          // Ignore transient Redis errors; the next tick retries.
+        }
       };
 
-      const eventName = `update:${userId}`;
-      appEventEmitter.on(eventName, onUpdate);
-
-      // Periodic keep-alive ping
-      const pingInterval = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode("data: ping\n\n"));
-        } catch {
-          // Stream might be closed
-          clearInterval(pingInterval);
-        }
-      }, 15000);
+      const interval = setInterval(() => void tick(), POLL_MS);
 
       request.signal.addEventListener("abort", () => {
-        clearInterval(pingInterval);
-        appEventEmitter.off(eventName, onUpdate);
+        if (closed) return;
+        closed = true;
+        clearInterval(interval);
         try {
           controller.close();
         } catch {
@@ -51,7 +59,7 @@ export async function GET(request: NextRequest) {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
     },
   });
 }

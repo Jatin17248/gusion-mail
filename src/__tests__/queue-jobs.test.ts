@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "../app/api/jobs/process/route";
 import { db } from "@/server/db";
 import { getTenant } from "@/server/lib/tenant";
-import { appEventEmitter } from "@/server/lib/event-emitter";
+import { publishUserEvent } from "@/server/lib/realtime";
 
 vi.mock("@/server/db", () => {
   const mockUpdateChain = {
@@ -30,10 +30,8 @@ vi.mock("@/server/lib/tenant", () => ({
   getTenant: vi.fn(),
 }));
 
-vi.mock("@/server/lib/event-emitter", () => ({
-  appEventEmitter: {
-    emit: vi.fn(),
-  },
+vi.mock("@/server/lib/realtime", () => ({
+  publishUserEvent: vi.fn(),
 }));
 
 describe("Queue Background Worker (/api/jobs/process)", () => {
@@ -63,7 +61,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
     expect(json.success).toBe(true);
     expect(json.results.snoozedReleased).toBe(1);
     expect(db.update).toHaveBeenCalled();
-    expect(appEventEmitter.emit).toHaveBeenCalledWith("update:user_1", {
+    expect(publishUserEvent).toHaveBeenCalledWith("user_1", {
       type: "inbox_update",
       message: "Snoozed email released to inbox",
     });
@@ -150,7 +148,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
 
     expect(json.success).toBe(true);
     expect(json.results.followUpsReminded).toBe(1);
-    expect(appEventEmitter.emit).toHaveBeenCalledWith("update:user_1", {
+    expect(publishUserEvent).toHaveBeenCalledWith("user_1", {
       type: "inbox_update",
       message: "Follow-up Reminder: No response to thread. Reason: Expect response",
     });
@@ -205,7 +203,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
 
     expect(json.success).toBe(true);
     expect(json.results.followUpsDismissed).toBe(1);
-    expect(appEventEmitter.emit).not.toHaveBeenCalledWith("update:user_1", expect.objectContaining({
+    expect(publishUserEvent).not.toHaveBeenCalledWith("user_1", expect.objectContaining({
       message: expect.stringContaining("Follow-up Reminder"),
     }));
   });

@@ -33,10 +33,6 @@ const securityHeaders = [
 
 /** @type {import("next").NextConfig} */
 const config = {
-  // Type safety is enforced by `tsc --noEmit` (run in `pnpm check` / CI).
-  // ESLint strictness (mostly `no-unsafe-*` from external lib `any` returns)
-  // is treated as lint debt and not allowed to block production builds.
-  eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [
       {

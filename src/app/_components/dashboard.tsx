@@ -126,8 +126,10 @@ export function Dashboard() {
       }
     };
 
+    // Don't close on error: let the browser's EventSource auto-reconnect
+    // (e.g. when the serverless SSE function reaches its max duration).
     eventSource.onerror = () => {
-      eventSource.close();
+      // transient; EventSource will retry automatically
     };
 
     return () => {

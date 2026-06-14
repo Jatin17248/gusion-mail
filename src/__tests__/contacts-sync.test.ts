@@ -50,10 +50,8 @@ vi.mock("@ai-sdk/google", () => ({
   google: vi.fn(),
 }));
 
-vi.mock("@/server/lib/event-emitter", () => ({
-  appEventEmitter: {
-    emit: vi.fn(),
-  },
+vi.mock("@/server/lib/realtime", () => ({
+  publishUserEvent: vi.fn(),
 }));
 
 describe("Contacts Webhook Ingestion", () => {
