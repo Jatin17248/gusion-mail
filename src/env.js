@@ -19,7 +19,10 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    STRIPE_PRICE_ID: z.string().optional(),
     GEMINI_API_KEY: z.string().optional(),
+    CORSAIR_WEBHOOK_SECRET: z.string().optional(),
+    CRON_SECRET: z.string().optional(),
   },
 
   /**
@@ -47,7 +50,10 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    CORSAIR_WEBHOOK_SECRET: process.env.CORSAIR_WEBHOOK_SECRET,
+    CRON_SECRET: process.env.CRON_SECRET,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },

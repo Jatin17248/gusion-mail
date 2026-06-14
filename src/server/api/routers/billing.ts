@@ -12,7 +12,7 @@ const stripe = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : null;
 
 export const billingRouter = createTRPCRouter({
   createCheckoutSession: protectedProcedure
-    .input(z.object({ priceId: z.string() }))
+    .input(z.object({ priceId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       trackEvent(ctx.session.user.id, "stripe_checkout_initiated", { priceId: input.priceId });
       if (!stripe) {
@@ -20,6 +20,15 @@ export const billingRouter = createTRPCRouter({
         return {
           url: `${env.NEXT_PUBLIC_APP_URL}?mock_stripe_checkout=success`,
         };
+      }
+
+      // Resolve the price: explicit input wins, otherwise the configured Pro price.
+      const priceId = input.priceId ?? env.STRIPE_PRICE_ID;
+      if (!priceId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No Stripe price configured. Set STRIPE_PRICE_ID.",
+        });
       }
 
       // Check if user already has a customer ID
@@ -31,7 +40,7 @@ export const billingRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      let customerId = user.referredByCode ?? ""; // Reuse this column or check subscriptions
+      let customerId = "";
       const sub = await db.query.subscriptions.findFirst({
         where: eq(subscriptions.userId, ctx.session.user.id),
       });
@@ -51,7 +60,7 @@ export const billingRouter = createTRPCRouter({
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ["card"],
-        line_items: [{ price: input.priceId, quantity: 1 }],
+        line_items: [{ price: priceId, quantity: 1 }],
         mode: "subscription",
         success_url: `${env.NEXT_PUBLIC_APP_URL}/?stripe_checkout=success`,
         cancel_url: `${env.NEXT_PUBLIC_APP_URL}/?stripe_checkout=cancel`,

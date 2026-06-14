@@ -24,11 +24,28 @@ function personalize(text: string, variables: Record<string, string>): string {
   return result;
 }
 
-export async function GET() {
+/**
+ * Only Vercel Cron (or a caller holding CRON_SECRET) may run jobs. Vercel Cron
+ * automatically sends `Authorization: Bearer ${CRON_SECRET}` when the env var is
+ * set. With no secret configured (local dev) we allow manual triggering.
+ */
+function isAuthorized(req: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  return req.headers.get("authorization") === `Bearer ${secret}`;
+}
+
+export async function GET(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return await processJobs();
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return await processJobs();
 }
 

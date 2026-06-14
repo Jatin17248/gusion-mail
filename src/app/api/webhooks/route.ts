@@ -159,13 +159,20 @@ export async function POST(request: NextRequest) {
     body = text.trim() ? text : {};
   }
 
-  // Resolve tenantId dynamically
+  // Resolve tenant from the payload's account. Never fall back to a shared
+  // default tenant — that would let a forged request touch another user's data.
   const url = new URL(request.url);
-  let tenantId = url.searchParams.get("tenantId") ?? "dev";
+  let tenantId = url.searchParams.get("tenantId") ?? "";
   let accountId = "";
 
   if (body && typeof body === "object") {
-    accountId = (body as any).accountId || (body as any).account_id || (body as any).payload?.accountId || (body as any).payload?.account_id;
+    const b = body as {
+      accountId?: string;
+      account_id?: string;
+      payload?: { accountId?: string; account_id?: string };
+    };
+    accountId =
+      b.accountId ?? b.account_id ?? b.payload?.accountId ?? b.payload?.account_id ?? "";
   }
 
   if (accountId) {
@@ -177,13 +184,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Webhook signature verification (if configured)
-  const signature = request.headers.get("x-corsair-signature") || request.headers.get("x-signature");
+  if (!tenantId) {
+    return NextResponse.json({ error: "Unresolved tenant" }, { status: 400 });
+  }
+
+  // Webhook signature verification: when a signature is present and a secret is
+  // configured, it must match.
+  const signature =
+    request.headers.get("x-corsair-signature") ?? request.headers.get("x-signature");
   if (signature && process.env.CORSAIR_WEBHOOK_SECRET) {
     const rawBody = typeof body === "string" ? body : JSON.stringify(body);
     const crypto = await import("crypto");
-    const hmac = crypto.createHmac("sha256", process.env.CORSAIR_WEBHOOK_SECRET);
-    const digest = hmac.update(rawBody).digest("hex");
+    const digest = crypto
+      .createHmac("sha256", process.env.CORSAIR_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest("hex");
     if (signature !== digest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }

@@ -57,7 +57,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
     vi.mocked(db.query.sendQueue.findMany).mockResolvedValue([]);
     vi.mocked(db.query.followUps.findMany).mockResolvedValue([]);
 
-    const res = await POST();
+    const res = await POST(new Request("http://localhost/api/jobs/process"));
     const json = await res.json();
 
     expect(json.success).toBe(true);
@@ -96,7 +96,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
       gmail: { api: { messages: { send: mockSend } } },
     } as any);
 
-    const res = await POST();
+    const res = await POST(new Request("http://localhost/api/jobs/process"));
     const json = await res.json();
 
     expect(json.success).toBe(true);
@@ -145,7 +145,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
       gmail: { db: { messages: { search: mockSearch } } },
     } as any);
 
-    const res = await POST();
+    const res = await POST(new Request("http://localhost/api/jobs/process"));
     const json = await res.json();
 
     expect(json.success).toBe(true);
@@ -200,7 +200,7 @@ describe("Queue Background Worker (/api/jobs/process)", () => {
       gmail: { db: { messages: { search: mockSearch } } },
     } as any);
 
-    const res = await POST();
+    const res = await POST(new Request("http://localhost/api/jobs/process"));
     const json = await res.json();
 
     expect(json.success).toBe(true);
