@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import DOMPurify from "isomorphic-dompurify";
 import { useShortcuts } from "@/app/_hooks/use-shortcuts";
 import { CommandPalette } from "@/app/_components/command-palette";
+import { AgentDrawer } from "@/app/_components/agent-drawer";
 import {
   formatMessageDate,
   formatSender,
@@ -27,12 +28,14 @@ import {
   Clock,
   X,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 
 
 
 export function Dashboard() {
   const { data: session } = useSession();
+  const utils = api.useUtils();
   const [activeTab, setActiveTab] = useState<"gmail" | "calendar">("gmail");
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,6 +43,7 @@ export function Dashboard() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
 
   // Compose state
   const [composeTo, setComposeTo] = useState("");
@@ -67,6 +71,41 @@ export function Dashboard() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Realtime updates subscription via SSE
+  useEffect(() => {
+    const eventSource = new EventSource("/api/realtime");
+
+    eventSource.onmessage = (event) => {
+      if (event.data === "connected" || event.data === "ping") {
+        return;
+      }
+      try {
+        const rawData = typeof event.data === "string" ? event.data : "";
+        const parsed = JSON.parse(rawData) as Record<string, unknown>;
+        const eventType = typeof parsed.type === "string" ? parsed.type : "";
+        const eventMsg = typeof parsed.message === "string" ? parsed.message : "Update received";
+
+        if (eventType === "inbox_update") {
+          void utils.gmail.searchEmails.invalidate();
+          toast.info(eventMsg);
+        } else if (eventType === "calendar_update") {
+          void utils.calendar.searchEvents.invalidate();
+          toast.info(eventMsg);
+        }
+      } catch (err) {
+        console.error("Failed to parse realtime event:", err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [utils]);
+
   // Fetch user details for trial check
   const { data: userProfile } = api.auth.me.useQuery(undefined, {
     staleTime: 60000,
@@ -81,7 +120,6 @@ export function Dashboard() {
   }, [userProfile]);
 
   // Gmail queries/mutations
-  const utils = api.useUtils();
   const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
     { query: debouncedSearch, limit: 30 },
     { enabled: activeTab === "gmail" }
@@ -261,6 +299,7 @@ export function Dashboard() {
       setComposeOpen(false);
       setCreateEventOpen(false);
       setShortcutHelpOpen(false);
+      setAgentOpen(false);
     },
     "g i": () => setActiveTab("gmail"),
     "g c": () => setActiveTab("calendar"),
@@ -269,15 +308,28 @@ export function Dashboard() {
       e.preventDefault();
       setCommandPaletteOpen((prev) => !prev);
     },
+    "Cmd+I": (e) => {
+      e.preventDefault();
+      setAgentOpen((prev) => !prev);
+    },
   });
 
-  const handleCommandAction = (action: string) => {
+  const handleCommandAction = (action: string, payload?: string) => {
     switch (action) {
+      case "search":
+        if (payload) {
+          setActiveTab("gmail");
+          setSearchQuery(payload);
+        }
+        break;
       case "inbox":
         setActiveTab("gmail");
         break;
       case "calendar":
         setActiveTab("calendar");
+        break;
+      case "agent":
+        setAgentOpen(true);
         break;
       case "compose":
         setComposeOpen(true);
@@ -334,6 +386,17 @@ export function Dashboard() {
             >
               <CalendarIcon size={16} />
               <span>Calendar</span>
+            </button>
+            <button
+              onClick={() => setAgentOpen(!agentOpen)}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
+                agentOpen
+                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+              }`}
+            >
+              <Sparkles size={16} />
+              <span>AI Agent</span>
             </button>
           </nav>
         </div>
@@ -907,6 +970,12 @@ export function Dashboard() {
         open={commandPaletteOpen}
         setOpen={setCommandPaletteOpen}
         onAction={handleCommandAction}
+      />
+
+      {/* AI Agent Drawer */}
+      <AgentDrawer
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
       />
     </div>
   );

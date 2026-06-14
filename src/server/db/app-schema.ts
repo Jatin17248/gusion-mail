@@ -5,6 +5,7 @@ import {
   primaryKey,
   integer,
   boolean,
+  unique,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -117,3 +118,110 @@ export const webhookEvents = pgTable("webhook_events", {
   status: text("status").notNull(), // 'processed' / 'failed'
   payloadHash: text("payload_hash"),
 });
+
+export const agentMessages = pgTable("agent_messages", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // 'user' | 'assistant' | 'system' | 'tool'
+  content: text("content"),
+  toolCalls: text("tool_calls"), // JSON string
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  metadata: text("metadata"), // JSON string or text info
+  ip: text("ip"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const templates = pgTable("templates", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shortcut: text("shortcut").notNull(),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  variables: text("variables"), // JSON string representing placeholders
+  isShared: boolean("is_shared").default(false),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const sendQueue = pgTable("send_queue", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  rawBase64Url: text("raw_base64_url").notNull(),
+  threadId: text("thread_id"),
+  sendAt: timestamp("send_at", { mode: "date" }).notNull(),
+  status: text("status").default("pending"), // 'pending', 'sent', 'failed'
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const followUps = pgTable("follow_ups", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  threadId: text("thread_id").notNull(),
+  sentMessageId: text("sent_message_id").notNull(),
+  remindAt: timestamp("remind_at", { mode: "date" }).notNull(),
+  reason: text("reason"),
+  status: text("status").default("pending"), // 'pending', 'reminded', 'dismissed'
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const schedulingLinks = pgTable("scheduling_links", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  slug: text("slug").unique().notNull(),
+  title: text("title").notNull(),
+  durationMins: integer("duration_mins").notNull(),
+  bufferMins: integer("buffer_mins").default(0),
+  availability: text("availability"), // JSON string representing slots/rules
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const bookings = pgTable("bookings", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  schedulingLinkId: text("scheduling_link_id")
+    .notNull()
+    .references(() => schedulingLinks.id, { onDelete: "cascade" }),
+  inviteeEmail: text("invitee_email").notNull(),
+  inviteeName: text("invitee_name").notNull(),
+  start: timestamp("start", { mode: "date" }).notNull(),
+  end: timestamp("end", { mode: "date" }).notNull(),
+  calendarEventId: text("calendar_event_id"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const contacts = pgTable("contacts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  name: text("name"),
+  lastInteractionAt: timestamp("last_interaction_at", { mode: "date" }),
+  interactionCount: integer("interaction_count").default(0),
+  isVip: boolean("is_vip").default(false),
+  enrichment: text("enrichment"), // JSON string representing company/social
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+}, (table) => [
+  {
+    parent: unique().on(table.userId, table.email),
+  },
+]);
+
