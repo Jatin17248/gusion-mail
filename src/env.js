@@ -23,6 +23,7 @@ export const env = createEnv({
     GEMINI_API_KEY: z.string().optional(),
     CORSAIR_WEBHOOK_SECRET: z.string().optional(),
     CRON_SECRET: z.string().optional(),
+    SENTRY_DSN: z.string().optional(),
   },
 
   /**
@@ -33,6 +34,7 @@ export const env = createEnv({
   client: {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
     NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+    NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   },
 
   /**
@@ -54,8 +56,10 @@ export const env = createEnv({
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     CORSAIR_WEBHOOK_SECRET: process.env.CORSAIR_WEBHOOK_SECRET,
     CRON_SECRET: process.env.CRON_SECRET,
+    SENTRY_DSN: process.env.SENTRY_DSN,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
