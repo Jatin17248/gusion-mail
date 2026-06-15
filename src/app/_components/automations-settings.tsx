@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { Sliders, Plus, Trash2, Check, SlidersHorizontal, Activity } from "lucide-react";
+import { Sliders, Plus, Trash2, SlidersHorizontal, Activity } from "lucide-react";
+import { parseRuleConditions, parseAutomationActions } from "@/server/lib/automation";
 
 export function AutomationsSettingsView() {
-  const utils = api.useUtils();
   const { data: rulesList, refetch: refetchRules } = api.automation.listRules.useQuery();
   const { data: runsList } = api.automation.listRuns.useQuery();
   const { data: members } = api.org.listMembers.useQuery();
@@ -286,12 +286,8 @@ export function AutomationsSettingsView() {
           ) : (
             <div className="space-y-3">
               {rulesList.map((rule) => {
-                let conds = [];
-                let acts = [];
-                try {
-                  conds = JSON.parse(rule.conditions);
-                  acts = JSON.parse(rule.actions);
-                } catch (e) {}
+                const conds = parseRuleConditions(rule.conditions);
+                const acts = parseAutomationActions(rule.actions);
 
                 return (
                   <div
@@ -313,7 +309,7 @@ export function AutomationsSettingsView() {
                       <div className="text-[10px] text-zinc-400 space-y-1">
                         <div>
                           <span className="text-zinc-550 font-bold">Conditions:</span>{" "}
-                          {conds.map((c: any, i: number) => (
+                          {conds.map((c, i) => (
                             <span key={i} className="bg-zinc-900 px-1 py-0.5 rounded text-zinc-300 mr-1">
                               {c.field} {c.operator} &quot;{c.value}&quot;
                             </span>
@@ -321,7 +317,7 @@ export function AutomationsSettingsView() {
                         </div>
                         <div>
                           <span className="text-zinc-550 font-bold">Actions:</span>{" "}
-                          {acts.map((a: any, i: number) => (
+                          {acts.map((a, i) => (
                             <span key={i} className="bg-indigo-950/20 px-1 py-0.5 rounded text-indigo-350 mr-1 border border-indigo-500/10">
                               {a.type} &rarr; {a.value}
                             </span>

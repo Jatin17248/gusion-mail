@@ -1,4 +1,3 @@
-/* eslint-disable */
 vi.mock("@/env", () => ({
   env: {
     DATABASE_URL: "postgres://localhost/test",

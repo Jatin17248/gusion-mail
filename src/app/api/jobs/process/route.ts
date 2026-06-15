@@ -13,6 +13,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { getTenant } from "@/server/lib/tenant";
 import { publishUserEvent } from "@/server/lib/realtime";
 import { encodeRawEmail } from "@/server/lib/email";
+import { errorMessage } from "@/server/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -280,10 +281,13 @@ async function processJobs() {
           continue;
         }
 
-        let vars = {};
+        let vars: Record<string, string> = {};
         try {
-          vars = JSON.parse(recipient.variables);
-        } catch (e) {
+          const parsed: unknown = JSON.parse(recipient.variables);
+          if (parsed && typeof parsed === "object") {
+            vars = parsed as Record<string, string>;
+          }
+        } catch {
           vars = {};
         }
 
@@ -312,11 +316,11 @@ async function processJobs() {
             .where(eq(bulkCampaigns.id, campaign.id));
 
           results.campaignsSent++;
-        } catch (err: any) {
+        } catch (err) {
           console.error(`Failed to send campaign email to ${recipient.email}:`, err);
           await db
             .update(bulkRecipients)
-            .set({ status: "failed", error: err.message || "Failed send" })
+            .set({ status: "failed", error: errorMessage(err, "Failed send") })
             .where(eq(bulkRecipients.id, recipient.id));
 
           await db

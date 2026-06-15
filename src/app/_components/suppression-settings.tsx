@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Shield, Plus, Trash2, Search, Mail } from "lucide-react";
 
 export function SuppressionListSettingsView() {
-  const utils = api.useUtils();
   const { data: suppressionList, refetch } = api.bulk.listSuppressionList.useQuery();
 
   const [emailInput, setEmailInput] = useState("");

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, orgProcedure, requireOrgRole } from "@/server/api/trpc";
 import { db } from "@/server/db";
 import { users, organizations, orgMembers } from "@/server/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const orgRouter = createTRPCRouter({

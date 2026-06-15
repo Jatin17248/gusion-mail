@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(html, {
       headers: { "Content-Type": "text/html" },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Unsubscribe error:", err);
     return new NextResponse("Internal Server Error", { status: 500 });
   }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, orgProcedure } from "@/server/api/trpc";
 import { db } from "@/server/db";
 import { bulkCampaigns, bulkRecipients, suppressionList, users } from "@/server/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const bulkRouter = createTRPCRouter({
@@ -136,7 +136,7 @@ export const bulkRouter = createTRPCRouter({
         .onConflictDoNothing()
         .returning();
 
-      return suppressed || { email: input.email };
+      return suppressed ?? { email: input.email };
     }),
 
   removeFromSuppressionList: orgProcedure

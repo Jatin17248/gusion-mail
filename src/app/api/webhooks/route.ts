@@ -23,15 +23,22 @@ import { env } from "@/env";
 import { publishUserEvent } from "@/server/lib/realtime";
 import { getTenant } from "@/server/lib/tenant";
 import { encodeRawEmail } from "@/server/lib/email";
+import { errorMessage } from "@/server/lib/http";
+import {
+  parseAutomationActions,
+  parseRuleConditions,
+  type AutomationAction,
+  type RuleCondition,
+} from "@/server/lib/automation";
 
 function matchConditions(
   msg: { subject: string; from: string; body: string; priority: string },
-  conditions: any[]
+  conditions: RuleCondition[]
 ): boolean {
-  if (!conditions || conditions.length === 0) return false;
+  if (conditions.length === 0) return false;
   for (const cond of conditions) {
-    const fieldVal = (msg[cond.field as keyof typeof msg] || "").toLowerCase();
-    const targetVal = (cond.value || "").toLowerCase();
+    const fieldVal = msg[cond.field].toLowerCase();
+    const targetVal = cond.value.toLowerCase();
 
     switch (cond.operator) {
       case "equals":
@@ -56,7 +63,7 @@ function matchConditions(
 async function fireOutboundWebhook(
   orgId: string,
   event: string,
-  payload: any
+  payload: unknown
 ) {
   const subscriptions = await db.query.outboundWebhooks.findMany({
     where: and(
@@ -70,8 +77,11 @@ async function fireOutboundWebhook(
   for (const sub of subscriptions) {
     let subEvents: string[] = [];
     try {
-      subEvents = JSON.parse(sub.events);
-    } catch (e) {
+      const parsedEvents: unknown = JSON.parse(sub.events);
+      if (Array.isArray(parsedEvents)) {
+        subEvents = parsedEvents.filter((e): e is string => typeof e === "string");
+      }
+    } catch {
       subEvents = [];
     }
 
@@ -102,14 +112,14 @@ async function fireOutboundWebhook(
         responseBody: responseBody.slice(0, 1000),
         success: response.ok,
       });
-    } catch (err: any) {
+    } catch (err) {
       await db.insert(webhookDeliveryLogs).values({
         orgId,
         webhookId: sub.id,
         event,
         payload: payloadStr,
         responseStatus: 0,
-        responseBody: err.message || "Failed to fetch",
+        responseBody: errorMessage(err, "Failed to fetch"),
         success: false,
       });
     }
@@ -411,13 +421,6 @@ Snippet: ${msg.data.snippet}`;
                 const msgBody = msg.data.body ?? msg.data.snippet ?? "";
 
                 for (const rule of activeRules) {
-                  let conditionsParsed = [];
-                  try {
-                    conditionsParsed = JSON.parse(rule.conditions);
-                  } catch (e) {
-                    conditionsParsed = [];
-                  }
-
                   const isMatch = matchConditions(
                     {
                       subject: msgSubject,
@@ -425,7 +428,7 @@ Snippet: ${msg.data.snippet}`;
                       body: msgBody,
                       priority: priority,
                     },
-                    conditionsParsed
+                    parseRuleConditions(rule.conditions)
                   );
 
                   if (isMatch) {
@@ -454,18 +457,11 @@ Snippet: ${msg.data.snippet}`;
                       continue;
                     }
 
-                    let actionsParsed = [];
-                    try {
-                      actionsParsed = JSON.parse(rule.actions);
-                    } catch (e) {
-                      actionsParsed = [];
-                    }
-
-                    const executed: any[] = [];
+                    const executed: AutomationAction[] = [];
                     let hasError = false;
                     let errorMsg = "";
 
-                    for (const action of actionsParsed) {
+                    for (const action of parseAutomationActions(rule.actions)) {
                       try {
                         if (action.type === "assign") {
                           await db
@@ -530,9 +526,9 @@ Snippet: ${msg.data.snippet}`;
                           });
                           executed.push({ type: "webhook", value: action.value });
                         }
-                      } catch (err: any) {
+                      } catch (err) {
                         hasError = true;
-                        errorMsg = err.message || "Action failed";
+                        errorMsg = errorMessage(err, "Action failed");
                         console.error(`Action failed in rule ${rule.id}:`, err);
                       }
                     }

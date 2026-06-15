@@ -38,17 +38,7 @@ import {
   Download,
   ExternalLink,
   Lock,
-  Terminal,
-  Sliders,
-  Eye,
-  EyeOff,
-  UserCheck,
-  Play,
   FileSpreadsheet,
-  Activity,
-  Check,
-  Edit,
-  Shield,
 } from "lucide-react";
 
 
@@ -75,8 +65,8 @@ export function Dashboard() {
   const [showSendLaterDropdown, setShowSendLaterDropdown] = useState(false);
 
   // Undo Send state
-  const [undoActive, setUndoActive] = useState(false);
-  const [undoDraft, setUndoDraft] = useState<{ to: string; subject: string; body: string; sendAt?: Date } | null>(null);
+  const [, setUndoActive] = useState(false);
+  const [, setUndoDraft] = useState<{ to: string; subject: string; body: string; sendAt?: Date } | null>(null);
   const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   // Reply inline state
@@ -237,7 +227,7 @@ export function Dashboard() {
     setUndoTimeoutId(timeoutId);
   };
 
-  const handleUndoSend = (to: string, subject: string, body: string, sendAt?: Date) => {
+  const handleUndoSend = (to: string, subject: string, body: string, _sendAt?: Date) => {
     setUndoActive((active) => {
       if (!active) return false;
       setComposeTo(to);
@@ -615,6 +605,7 @@ export function Dashboard() {
           <div className="flex items-center justify-between border-t border-zinc-900 pt-4 px-2">
             <div className="flex items-center gap-2 min-w-0">
               {session?.user?.image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external Google avatar; next/image would require remote-domain config
                 <img
                   src={session.user.image}
                   alt={session.user.name ?? ""}
@@ -2058,7 +2049,7 @@ function SettingsView() {
                   {contactsData.map((contact) => (
                     <div key={contact.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
                       <div className="min-w-0 text-left">
-                        <div className="text-xs font-bold text-zinc-200 truncate">{contact.name || contact.email}</div>
+                        <div className="text-xs font-bold text-zinc-200 truncate">{contact.name ?? contact.email}</div>
                         {contact.name && (
                           <div className="text-[10px] text-zinc-550 truncate mt-0.5">{contact.email}</div>
                         )}
@@ -2149,7 +2140,7 @@ function SettingsView() {
                           <div className="flex items-center gap-1.5">
                             <select
                               value={member.role}
-                              onChange={(e) => updateMemberRole.mutate({ memberId: member.id, role: e.target.value as any })}
+                              onChange={(e) => updateMemberRole.mutate({ memberId: member.id, role: e.target.value as "admin" | "member" })}
                               className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded text-[10px] text-zinc-300 focus:outline-none"
                             >
                               <option value="member">Member</option>
@@ -2194,7 +2185,7 @@ function SettingsView() {
                     <label className="block text-[10px] text-zinc-500 font-semibold mb-1">Role</label>
                     <select
                       value={orgInviteRole}
-                      onChange={(e) => setOrgInviteRole(e.target.value as any)}
+                      onChange={(e) => setOrgInviteRole(e.target.value as "admin" | "member")}
                       className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-300 focus:outline-none"
                     >
                       <option value="member">Member</option>
@@ -2438,7 +2429,7 @@ function TicketsView({
   });
 
   const selectedTicket = useMemo(() => {
-    return ticketsData?.find((t) => t.id === selectedTicketId) || null;
+    return ticketsData?.find((t) => t.id === selectedTicketId) ?? null;
   }, [ticketsData, selectedTicketId]);
 
   return (
@@ -2484,7 +2475,7 @@ function TicketsView({
                   </span>
                 </div>
                 <div className="text-xs font-bold text-zinc-200 truncate">{ticket.subject}</div>
-                <div className="text-[10px] text-zinc-400 truncate">From: {ticket.fromName || ticket.fromEmail}</div>
+                <div className="text-[10px] text-zinc-400 truncate">From: {ticket.fromName ?? ticket.fromEmail}</div>
                 <div className="text-[9px] text-zinc-500 truncate mt-1">
                   {ticket.assignedUser ? `Assigned to: ${ticket.assignedUser.name}` : "Unassigned"}
                 </div>
@@ -2531,7 +2522,7 @@ function TicketsView({
                 <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Ticket Status</label>
                 <select
                   value={selectedTicket.status}
-                  onChange={(e) => updateStatus.mutate({ id: selectedTicket.id, status: e.target.value as any })}
+                  onChange={(e) => updateStatus.mutate({ id: selectedTicket.id, status: e.target.value as "open" | "pending" | "resolved" })}
                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
                 >
                   <option value="open">Open</option>
@@ -2561,7 +2552,7 @@ function TicketsView({
               <div className="space-y-2">
                 <h4 className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Ticket Description (Snippet)</h4>
                 <div className="p-4 rounded-xl border border-zinc-900 bg-zinc-950/30 text-xs text-zinc-300 leading-relaxed italic">
-                  &quot;{selectedTicket.snippet || "No description provided."}&quot;
+                  &quot;{selectedTicket.snippet ?? "No description provided."}&quot;
                 </div>
               </div>
 

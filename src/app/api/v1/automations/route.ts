@@ -1,81 +1,86 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { validateApiKey } from "@/server/lib/api-auth";
+import { z } from "zod";
+import { validateApiKey, hasScope } from "@/server/lib/api-auth";
+import { errorMessage } from "@/server/lib/http";
+import {
+  parseAutomationActions,
+  type AutomationAction,
+} from "@/server/lib/automation";
 import { db } from "@/server/db";
 import { rules, tickets, automationRuns, users } from "@/server/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getTenant } from "@/server/lib/tenant";
 import { encodeRawEmail } from "@/server/lib/email";
 
-export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const auth = await validateApiKey(authHeader);
+const triggerSchema = z.object({
+  ruleId: z.string().min(1),
+  threadId: z.string().optional(),
+  gmailMessageId: z.string().optional(),
+  payload: z
+    .object({
+      to: z.string().optional(),
+      from: z.string().optional(),
+      subject: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
+});
 
+export async function POST(request: NextRequest) {
+  const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  if (auth.scopes.length > 0 && !auth.scopes.includes("automations:trigger") && !auth.scopes.includes("*")) {
-    return NextResponse.json({ error: "Forbidden: Missing automations:trigger scope" }, { status: 403 });
+  if (!hasScope(auth.scopes, "automations:trigger")) {
+    return NextResponse.json({ error: "Forbidden: missing automations:trigger scope" }, { status: 403 });
   }
 
-  let body: any;
-  try {
-    body = await request.json();
-  } catch (e) {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  const parsed = triggerSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request body", details: parsed.error.flatten() },
+      { status: 400 },
+    );
   }
-
-  const { ruleId, threadId, gmailMessageId, payload } = body;
-  if (!ruleId) {
-    return NextResponse.json({ error: "Missing required field: ruleId" }, { status: 400 });
-  }
+  const { ruleId, threadId, gmailMessageId, payload } = parsed.data;
 
   try {
     const rule = await db.query.rules.findFirst({
       where: and(eq(rules.id, ruleId), eq(rules.orgId, auth.orgId)),
     });
-
     if (!rule) {
       return NextResponse.json({ error: "Automation rule not found" }, { status: 404 });
     }
 
-    // Load first connected user for Corsair client
     const user = await db.query.users.findFirst({
       where: and(eq(users.activeOrgId, auth.orgId), eq(users.gmailConnected, true)),
     });
-
     if (!user) {
       return NextResponse.json({ error: "No connected Gmail account found for automation send action." }, { status: 400 });
     }
 
-    let actionsParsed = [];
-    try {
-      actionsParsed = JSON.parse(rule.actions);
-    } catch (e) {
-      actionsParsed = [];
-    }
-
-    const executed: any[] = [];
+    const actions = parseAutomationActions(rule.actions);
+    const executed: AutomationAction[] = [];
     let hasError = false;
     let errorMsg = "";
 
-    for (const action of actionsParsed) {
+    for (const action of actions) {
       try {
         if (action.type === "assign" && threadId) {
           await db
             .update(tickets)
             .set({ assignedUserId: action.value, updatedAt: new Date() })
-            .where(eq(tickets.threadId, threadId));
-          executed.push({ type: "assign", value: action.value });
+            .where(and(eq(tickets.threadId, threadId), eq(tickets.orgId, auth.orgId)));
+          executed.push(action);
         } else if (action.type === "change_status" && threadId) {
           await db
             .update(tickets)
             .set({ status: action.value, updatedAt: new Date() })
-            .where(eq(tickets.threadId, threadId));
-          executed.push({ type: "change_status", value: action.value });
+            .where(and(eq(tickets.threadId, threadId), eq(tickets.orgId, auth.orgId)));
+          executed.push(action);
         } else if ((action.type === "add_label" || action.type === "tag") && threadId) {
           const ticket = await db.query.tickets.findFirst({
-            where: eq(tickets.threadId, threadId),
+            where: and(eq(tickets.threadId, threadId), eq(tickets.orgId, auth.orgId)),
           });
           const existingTags = ticket?.tags ? ticket.tags.split(",") : [];
           if (!existingTags.includes(action.value)) {
@@ -83,22 +88,19 @@ export async function POST(request: NextRequest) {
             await db
               .update(tickets)
               .set({ tags: existingTags.join(","), updatedAt: new Date() })
-              .where(eq(tickets.threadId, threadId));
+              .where(and(eq(tickets.threadId, threadId), eq(tickets.orgId, auth.orgId)));
           }
-          executed.push({ type: "add_label", value: action.value });
+          executed.push(action);
         } else if (action.type === "auto_reply" && threadId && gmailMessageId) {
-          const tenant = getTenant(user.corsairTenantId!);
+          const tenant = getTenant(user.corsairTenantId);
           const replyRaw = encodeRawEmail({
-            to: payload?.to || payload?.from || "",
-            subject: payload?.subject || "Re: Ticket Update",
+            to: payload?.to ?? payload?.from ?? "",
+            subject: payload?.subject ?? "Re: Ticket Update",
             body: action.value,
             inReplyTo: gmailMessageId,
           });
-          await tenant.gmail.api.messages.send({
-            raw: replyRaw,
-            threadId: threadId,
-          });
-          executed.push({ type: "auto_reply", value: action.value });
+          await tenant.gmail.api.messages.send({ raw: replyRaw, threadId });
+          executed.push(action);
         } else if (action.type === "webhook") {
           await fetch(action.value, {
             method: "POST",
@@ -110,25 +112,25 @@ export async function POST(request: NextRequest) {
               payload,
             }),
           });
-          executed.push({ type: "webhook", value: action.value });
+          executed.push(action);
         }
-      } catch (err: any) {
+      } catch (err) {
         hasError = true;
-        errorMsg = err.message || "Action execution failed";
+        errorMsg = errorMessage(err, "Action execution failed");
       }
     }
 
     await db.insert(automationRuns).values({
       orgId: auth.orgId,
       ruleId: rule.id,
-      gmailMessageId: gmailMessageId || null,
+      gmailMessageId: gmailMessageId ?? null,
       status: hasError ? "failed" : "success",
       error: hasError ? errorMsg : null,
       actionsExecuted: JSON.stringify(executed),
     });
 
     return NextResponse.json({ success: !hasError, executed, error: hasError ? errorMsg : null });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to trigger automation" }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err, "Failed to trigger automation") }, { status: 500 });
   }
 }

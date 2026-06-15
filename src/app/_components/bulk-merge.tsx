@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { FileSpreadsheet, Plus, Play, Info, Eye, Check, Activity, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, Plus, Play, Info, Eye, Activity, X } from "lucide-react";
 
 export function BulkMergeView() {
   const utils = api.useUtils();
@@ -71,7 +71,7 @@ export function BulkMergeView() {
       const values = line.split(",").map(v => v.trim());
       const rowObj: Record<string, string> = {};
       headers.forEach((h, idx) => {
-        rowObj[h] = values[idx] || "";
+        rowObj[h] = values[idx] ?? "";
       });
       return rowObj;
     });
@@ -103,9 +103,9 @@ export function BulkMergeView() {
 
   const currentPreviewEmail = useMemo(() => {
     if (parsedData.rows.length === 0) return null;
-    const row = parsedData.rows[previewIdx] || parsedData.rows[0]!;
+    const row = parsedData.rows[previewIdx] ?? parsedData.rows[0]!;
     return {
-      to: row.email || "No email column found",
+      to: row.email ?? "No email column found",
       subject: personalize(subject || "No Subject", row),
       body: personalize(body || "No Body", row),
     };
@@ -123,7 +123,7 @@ export function BulkMergeView() {
     }
 
     const recipients = parsedData.rows.map(row => ({
-      email: row.email || "",
+      email: row.email ?? "",
       variables: row,
     })).filter(r => r.email !== "");
 

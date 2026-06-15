@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { Lock, Plus, Trash2, Copy, Eye, EyeOff, Terminal, Shield, Check, Activity } from "lucide-react";
+import { Lock, Trash2, Copy, Terminal, Shield, Activity } from "lucide-react";
+import { parseStringArray } from "@/server/lib/http";
 
 export function DeveloperSettingsView() {
-  const utils = api.useUtils();
   const { data: keysList, refetch: refetchKeys } = api.apikeys.listKeys.useQuery();
   const { data: webhooksList, refetch: refetchWebhooks } = api.apikeys.listWebhookSubscriptions.useQuery();
 
@@ -207,10 +207,7 @@ export function DeveloperSettingsView() {
             ) : (
               <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
                 {keysList.map((key) => {
-                  let scopesArr = [];
-                  try {
-                    scopesArr = JSON.parse(key.scopes);
-                  } catch (e) {}
+                  const scopesArr = parseStringArray(key.scopes);
 
                   return (
                     <div key={key.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
@@ -220,7 +217,7 @@ export function DeveloperSettingsView() {
                           Prefix: {key.keyPrefix}****
                         </div>
                         <div className="text-[9px] text-zinc-450 flex flex-wrap gap-1">
-                          {scopesArr.map((s: string, idx: number) => (
+                          {scopesArr.map((s, idx) => (
                             <span key={idx} className="bg-zinc-900 px-1 py-0.2 rounded border border-zinc-800/80">{s}</span>
                           ))}
                         </div>
@@ -299,10 +296,7 @@ export function DeveloperSettingsView() {
             ) : (
               <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                 {webhooksList.map((wh) => {
-                  let eventsArr = [];
-                  try {
-                    eventsArr = JSON.parse(wh.events);
-                  } catch (e) {}
+                  const eventsArr = parseStringArray(wh.events);
 
                   return (
                     <div
@@ -320,7 +314,7 @@ export function DeveloperSettingsView() {
                           Secret: {wh.secret}
                         </div>
                         <div className="text-[9px] text-zinc-450 flex flex-wrap gap-1">
-                          {eventsArr.map((ev: string, idx: number) => (
+                          {eventsArr.map((ev, idx) => (
                             <span key={idx} className="bg-zinc-900 px-1 py-0.2 rounded border border-zinc-800/80">{ev}</span>
                           ))}
                         </div>
@@ -378,7 +372,7 @@ export function DeveloperSettingsView() {
                             log.success ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
                           }`}
                         >
-                          HTTP {log.responseStatus || "Error"}
+                          HTTP {log.responseStatus ?? "Error"}
                         </span>
                       </div>
                       <div className="text-[10px] text-zinc-500">

@@ -217,7 +217,8 @@ export const requireOrgRole = (roles: ("owner" | "admin" | "member")[]) =>
     if (!ctx.session?.user || !ctx.org) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "Not a member of an organization." });
     }
-    if (!roles.includes(ctx.org.role as any)) {
+    const role = ctx.org.role;
+    if (!roles.some((r) => r === role)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient organization permissions." });
     }
     return next({

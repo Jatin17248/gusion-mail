@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "../app/api/jobs/process/route";
 import { db } from "@/server/db";
