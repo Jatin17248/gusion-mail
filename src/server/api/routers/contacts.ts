@@ -88,4 +88,16 @@ export const contactsRouter = createTRPCRouter({
         .returning();
       return inserted;
     }),
+
+  getContactByEmail: protectedProcedure
+    .input(z.object({ email: z.string().email() }))
+    .query(async ({ ctx, input }) => {
+      const contact = await db.query.contacts.findFirst({
+        where: and(
+          eq(contacts.email, input.email),
+          eq(contacts.userId, ctx.session.user.id)
+        ),
+      });
+      return contact ?? null;
+    }),
 });

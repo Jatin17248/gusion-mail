@@ -1,93 +1,69 @@
-import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { db } from "@/server/db";
 import { subscriptions, users } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
-import { TRPCError } from "@trpc/server";
-import Stripe from "stripe";
 import { env } from "@/env";
 import { trackEvent } from "@/lib/analytics";
-
-const stripe = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : null;
+import crypto from "crypto";
 
 export const billingRouter = createTRPCRouter({
   createCheckoutSession: protectedProcedure
-    .input(z.object({ priceId: z.string().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      trackEvent(ctx.session.user.id, "stripe_checkout_initiated", { priceId: input.priceId });
-      if (!stripe) {
-        // Mock session in development when Stripe is not configured
+    .mutation(async ({ ctx }) => {
+      trackEvent(ctx.session.user.id, "payu_checkout_initiated");
+      
+      const key = env.PAYU_MERCHANT_KEY;
+      const salt = env.PAYU_SALT;
+      
+      if (!key || !salt) {
+        // Mock session in development when PayU is not configured
         return {
-          url: `${env.NEXT_PUBLIC_APP_URL}?mock_stripe_checkout=success`,
+          mock: true,
+          url: `${env.NEXT_PUBLIC_APP_URL}?mock_payu_checkout=success`,
         };
       }
 
-      // Resolve the price: explicit input wins, otherwise the configured Pro price.
-      const priceId = input.priceId ?? env.STRIPE_PRICE_ID;
-      if (!priceId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "No Stripe price configured. Set STRIPE_PRICE_ID.",
-        });
-      }
+      const txnid = `txn_${crypto.randomBytes(8).toString('hex')}`;
+      const amount = "20.00"; // Assuming $20/mo or equivalent in local currency
+      const productinfo = "Gusion Mail Pro Subscription";
+      const firstname = ctx.session.user.name?.split(' ')[0] ?? "User";
+      const email = ctx.session.user.email ?? "";
+      
+      const surl = `${env.NEXT_PUBLIC_APP_URL}/api/payu/webhook`;
+      const curl = `${env.NEXT_PUBLIC_APP_URL}/?payu_checkout=cancel`;
 
-      // Check if user already has a customer ID
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, ctx.session.user.id),
-      });
+      // Hash sequence: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||salt
+      // Using udf1 to store userId for webhook processing
+      const udf1 = ctx.session.user.id;
+      const hashString = `${key}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|${udf1}||||||||||${salt}`;
+      const hash = crypto.createHash('sha512').update(hashString).digest('hex');
 
-      if (!user) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-      }
+      const payuBaseUrl = env.PAYU_BASE_URL ?? "https://secure.payu.in/_payment";
 
-      let customerId = "";
-      const sub = await db.query.subscriptions.findFirst({
-        where: eq(subscriptions.userId, ctx.session.user.id),
-      });
-      if (sub?.stripeCustomerId) {
-        customerId = sub.stripeCustomerId;
-      }
-
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: ctx.session.user.email ?? undefined,
-          name: ctx.session.user.name ?? undefined,
-          metadata: { userId: ctx.session.user.id },
-        });
-        customerId = customer.id;
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        payment_method_types: ["card"],
-        line_items: [{ price: priceId, quantity: 1 }],
-        mode: "subscription",
-        success_url: `${env.NEXT_PUBLIC_APP_URL}/?stripe_checkout=success`,
-        cancel_url: `${env.NEXT_PUBLIC_APP_URL}/?stripe_checkout=cancel`,
-        metadata: { userId: ctx.session.user.id },
-      });
-
-      return { url: session.url };
+      return {
+        mock: false,
+        payuUrl: payuBaseUrl,
+        params: {
+          key,
+          txnid,
+          amount,
+          productinfo,
+          firstname,
+          email,
+          phone: "", // Optional, but required by some PayU setups, client can fill
+          surl,
+          curl,
+          furl: curl, // Failure URL
+          hash,
+          udf1,
+        }
+      };
     }),
 
   createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
-    trackEvent(ctx.session.user.id, "stripe_portal_opened");
-    const sub = await db.query.subscriptions.findFirst({
-      where: eq(subscriptions.userId, ctx.session.user.id),
-    });
-
-    if (!sub?.stripeCustomerId || !stripe) {
-      return {
-        url: `${env.NEXT_PUBLIC_APP_URL}?mock_stripe_portal=active`,
-      };
-    }
-
-    const session = await stripe.billingPortal.sessions.create({
-      customer: sub.stripeCustomerId,
-      return_url: env.NEXT_PUBLIC_APP_URL,
-    });
-
-    return { url: session.url };
+    trackEvent(ctx.session.user.id, "payu_portal_opened");
+    // PayU does not have a drop-in customer portal like Stripe.
+    // For now, we return a mock URL. You would integrate PayU's subscription management API here.
+    return { url: `${env.NEXT_PUBLIC_APP_URL}?mock_payu_portal=active` };
   }),
 
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
@@ -106,8 +82,8 @@ export const billingRouter = createTRPCRouter({
     }
 
     return {
-      plan: process.env.NODE_ENV !== "test" ? "pro" : (sub?.plan ?? "free"),
-      status: process.env.NODE_ENV !== "test" ? "active" : (sub?.status ?? "inactive"),
+      plan: sub?.plan ?? "free",
+      status: sub?.status ?? "inactive",
       trialDaysRemaining,
       currentPeriodEnd: sub?.currentPeriodEnd ?? null,
     };

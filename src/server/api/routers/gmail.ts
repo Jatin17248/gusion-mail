@@ -15,7 +15,7 @@ import {
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
 import { db } from "@/server/db";
-import { users, emailMeta, sendQueue } from "@/server/db/schema";
+import { users, emailMeta, sendQueue, followUps } from "@/server/db/schema";
 import { eq, and, or, inArray, ne, desc } from "drizzle-orm";
 
 const paginationSchema = z.object({
@@ -570,6 +570,28 @@ export const gmailRouter = createTRPCRouter({
         rawBase64Url: raw,
         threadId: input.threadId ?? null,
         sendAt: input.sendAt,
+        status: "pending",
+      });
+
+      return { success: true };
+    }),
+
+  createFollowUp: protectedProcedure
+    .input(
+      z.object({
+        threadId: z.string().min(1),
+        sentMessageId: z.string().min(1),
+        remindAt: z.date(),
+        reason: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await db.insert(followUps).values({
+        userId: ctx.session.user.id,
+        threadId: input.threadId,
+        sentMessageId: input.sentMessageId,
+        remindAt: input.remindAt,
+        reason: input.reason ?? "No reply",
         status: "pending",
       });
 

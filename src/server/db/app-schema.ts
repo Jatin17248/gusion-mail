@@ -84,8 +84,8 @@ export const subscriptions = pgTable("subscriptions", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
+  payuCustomerId: text("payu_customer_id"),
+  payuSubscriptionId: text("payu_subscription_id"),
   plan: text("plan").notNull().default("free"), // 'free' | 'pro' | 'team'
   status: text("status"), // 'active', 'trialing', 'past_due', 'canceled'
   currentPeriodEnd: timestamp("current_period_end", { mode: "date" }),
@@ -139,6 +139,16 @@ export const auditLogs = pgTable("audit_logs", {
   action: text("action").notNull(),
   metadata: text("metadata"), // JSON string or text info
   ip: text("ip"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const savedSearches = pgTable("saved_searches", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  query: text("query").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });
 

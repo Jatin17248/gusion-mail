@@ -14,6 +14,7 @@ import { ticketsRouter } from "@/server/api/routers/tickets";
 import { automationRouter } from "@/server/api/routers/automation";
 import { apiKeysRouter } from "@/server/api/routers/apikeys";
 import { bulkRouter } from "@/server/api/routers/bulk";
+import { searchRouter } from "@/server/api/routers/search";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -38,6 +39,7 @@ export const appRouter = createTRPCRouter({
   automation: automationRouter,
   apikeys: apiKeysRouter,
   bulk: bulkRouter,
+  search: searchRouter,
 });
 
 // export type definition of API

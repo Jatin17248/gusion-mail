@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings } from "lucide-react";
+import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings, Bookmark } from "lucide-react";
+import { api } from "@/trpc/react";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -10,6 +11,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps) {
   const [value, setValue] = useState("");
+  const { data: savedSearches } = api.search.listSavedSearches.useQuery(undefined, { enabled: open });
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -71,6 +73,27 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
                   <span>Search mail for &ldquo;{value}&rdquo;</span>
                 </Command.Item>
               </Command.Group>
+            )}
+
+            {savedSearches && savedSearches.length > 0 && (
+              <>
+                <Command.Group heading="Saved Searches" className="px-2 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  {savedSearches.map((search) => (
+                    <Command.Item
+                      key={search.id}
+                      onSelect={() => {
+                        onAction("search", search.query);
+                        setOpen(false);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Bookmark size={14} className="text-zinc-500" />
+                      <span>{search.name}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+                <div className="my-1 border-t border-zinc-800" />
+              </>
             )}
 
             <Command.Group heading="Email Search Filters" className="px-2 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">

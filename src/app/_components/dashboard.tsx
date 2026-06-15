@@ -10,6 +10,8 @@ import { AutomationsSettingsView } from "@/app/_components/automations-settings"
 import { DeveloperSettingsView } from "@/app/_components/developer-settings";
 import { SuppressionListSettingsView } from "@/app/_components/suppression-settings";
 import { BulkMergeView } from "@/app/_components/bulk-merge";
+import { TemplatesSettingsView } from "@/app/_components/templates-settings";
+import { ContactsSidePanel } from "@/app/_components/contacts-panel";
 import {
   formatMessageDate,
   formatSender,
@@ -39,6 +41,7 @@ import {
   ExternalLink,
   Lock,
   FileSpreadsheet,
+  Bell,
 } from "lucide-react";
 
 
@@ -63,6 +66,7 @@ export function Dashboard() {
   const [aiComposePrompt, setAiComposePrompt] = useState("");
   const [showSnoozeDropdown, setShowSnoozeDropdown] = useState(false);
   const [showSendLaterDropdown, setShowSendLaterDropdown] = useState(false);
+  const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
 
   // Undo Send state
   const [, setUndoActive] = useState(false);
@@ -150,6 +154,7 @@ export function Dashboard() {
     { id: activeMessageId ?? "" },
     { enabled: !!activeMessageId }
   );
+  const { data: templates } = api.template.listTemplates.useQuery();
 
   const refreshInbox = api.gmail.refreshInbox.useMutation({
     onSuccess: (res) => {
@@ -330,6 +335,15 @@ export function Dashboard() {
     },
   });
 
+  const createFollowUp = api.gmail.createFollowUp.useMutation({
+    onSuccess: () => {
+      toast.success("Follow-up reminder set for 2 days from now!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to set follow-up reminder.");
+    },
+  });
+
   // Calendar queries/mutations
   const weekRange = useMemo(() => {
     const start = new Date();
@@ -427,6 +441,10 @@ export function Dashboard() {
     c: (e) => {
       e.preventDefault();
       setComposeOpen(true);
+    },
+    "/": (e) => {
+      e.preventDefault();
+      setCommandPaletteOpen(true);
     },
     r: (e) => {
       e.preventDefault();
@@ -817,11 +835,12 @@ export function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col h-full overflow-hidden">
-                  {/* Reading Pane Header */}
-                  <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-bold text-white mb-2 leading-snug">
+                <div className="flex-1 flex h-full overflow-hidden">
+                  <div className="flex-1 flex flex-col h-full border-r border-zinc-900">
+                    {/* Reading Pane Header */}
+                    <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-bold text-white mb-2 leading-snug">
                         {selectedMessage.subject || "(No Subject)"}
                       </h2>
                       <div className="text-xs space-y-1">
@@ -836,6 +855,23 @@ export function Dashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 relative">
+                      <button
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + 2);
+                          createFollowUp.mutate({
+                            threadId: selectedMessage.threadId,
+                            sentMessageId: selectedMessage.id,
+                            remindAt: d,
+                          });
+                        }}
+                        disabled={createFollowUp.isPending}
+                        className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer disabled:opacity-50"
+                        title="Remind me if no reply (2 days)"
+                      >
+                        <Bell size={16} />
+                      </button>
+
                       <button
                         onClick={() => archiveEmail.mutate({ id: selectedMessage.id })}
                         className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
@@ -1008,6 +1044,15 @@ export function Dashboard() {
                         </div>
                       </div>
                     </div>
+                    </div>
+                  </div>
+                  
+                  {/* Contacts Side Panel */}
+                  <div className="w-80 flex-shrink-0 flex flex-col h-full bg-zinc-950">
+                    <ContactsSidePanel 
+                      email={parseEmailAddress(selectedMessage.from).email} 
+                      name={parseEmailAddress(selectedMessage.from).name} 
+                    />
                   </div>
                 </div>
               )}
@@ -1260,13 +1305,41 @@ export function Dashboard() {
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setComposeOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-              >
-                Cancel
-              </button>
+            <div className="flex justify-between items-center pt-2">
+              <div className="relative">
+                <button
+                  onClick={() => setShowTemplatesDropdown(!showTemplatesDropdown)}
+                  className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-md transition cursor-pointer text-xs font-semibold"
+                >
+                  Templates
+                </button>
+                {showTemplatesDropdown && (
+                  <div className="absolute left-0 bottom-full mb-2 w-64 max-h-60 overflow-y-auto p-2 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-1">
+                    <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Insert Template</div>
+                    {templates?.length === 0 && <div className="text-xs text-zinc-500 px-1 py-1">No templates found</div>}
+                    {templates?.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          if (t.subject) setComposeSubject(t.subject);
+                          setComposeBody(prev => prev ? prev + '\n\n' + t.body : t.body);
+                          setShowTemplatesDropdown(false);
+                        }}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition cursor-pointer truncate"
+                      >
+                        {t.name} (/{t.shortcut})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setComposeOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
               <div className="relative flex items-center">
                 <button
                   onClick={() => triggerSendEmail(composeTo, composeSubject, composeBody)}
@@ -1336,6 +1409,7 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* Create Event Modal */}
@@ -1464,7 +1538,7 @@ export function Dashboard() {
 function SettingsView() {
   const { data: session } = useSession();
   const utils = api.useUtils();
-  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "automations" | "developer" | "suppression">("general");
+  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "templates" | "automations" | "developer" | "suppression">("general");
   const [inviteEmail, setInviteEmail] = useState("");
   const [referralCodeInput, setReferralCodeInput] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -1726,6 +1800,16 @@ function SettingsView() {
           }`}
         >
           General Settings
+        </button>
+        <button
+          onClick={() => setSettingsSubTab("templates")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "templates"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Templates
         </button>
         <button
           onClick={() => setSettingsSubTab("automations")}
@@ -2239,7 +2323,7 @@ function SettingsView() {
               </button>
             ) : (
               <button
-                onClick={() => checkoutSession.mutate({})}
+                onClick={() => checkoutSession.mutate()}
                 disabled={checkoutSession.isPending}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs transition cursor-pointer disabled:opacity-50"
               >
@@ -2348,6 +2432,7 @@ function SettingsView() {
       </div>
       )}
 
+      {settingsSubTab === "templates" && <TemplatesSettingsView />}
       {settingsSubTab === "automations" && <AutomationsSettingsView />}
       {settingsSubTab === "developer" && <DeveloperSettingsView />}
       {settingsSubTab === "suppression" && <SuppressionListSettingsView />}
