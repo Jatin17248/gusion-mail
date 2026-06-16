@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings, Bookmark } from "lucide-react";
+import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings, Bookmark, Clock } from "lucide-react";
 import { api } from "@/trpc/react";
 
 interface CommandPaletteProps {
@@ -11,7 +11,14 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps) {
   const [value, setValue] = useState("");
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { data: savedSearches } = api.search.listSavedSearches.useQuery(undefined, { enabled: open });
+
+  useEffect(() => {
+    try {
+      setRecentSearches(JSON.parse(localStorage.getItem("recent_searches") || "[]"));
+    } catch {}
+  }, [open]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -89,6 +96,27 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
                     >
                       <Bookmark size={14} className="text-zinc-500" />
                       <span>{search.name}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+                <div className="my-1 border-t border-zinc-800" />
+              </>
+            )}
+
+            {recentSearches.length > 0 && (
+              <>
+                <Command.Group heading="Recent Searches" className="px-2 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  {recentSearches.map((query, idx) => (
+                    <Command.Item
+                      key={`recent-${idx}`}
+                      onSelect={() => {
+                        onAction("search", query);
+                        setOpen(false);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-400 rounded-md cursor-pointer hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Clock size={14} className="text-zinc-500" />
+                      <span>{query}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>

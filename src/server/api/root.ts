@@ -1,6 +1,6 @@
 import { calendarRouter } from "@/server/api/routers/calendar";
 import { gmailRouter } from "@/server/api/routers/gmail";
-import { postRouter } from "@/server/api/routers/post";
+import { connectedAccountsRouter } from "@/server/api/routers/connected-accounts";
 import { authRouter } from "@/server/api/routers/auth";
 import { billingRouter } from "@/server/api/routers/billing";
 import { agentRouter } from "@/server/api/routers/agent";
@@ -15,6 +15,8 @@ import { automationRouter } from "@/server/api/routers/automation";
 import { apiKeysRouter } from "@/server/api/routers/apikeys";
 import { bulkRouter } from "@/server/api/routers/bulk";
 import { searchRouter } from "@/server/api/routers/search";
+import { sharedMailboxRouter } from "@/server/api/routers/shared-mailboxes";
+import { sheetsRouter } from "@/server/api/routers/sheets";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -23,7 +25,6 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  post: postRouter,
   gmail: gmailRouter,
   calendar: calendarRouter,
   auth: authRouter,
@@ -40,6 +41,9 @@ export const appRouter = createTRPCRouter({
   apikeys: apiKeysRouter,
   bulk: bulkRouter,
   search: searchRouter,
+  sharedMailboxes: sharedMailboxRouter,
+  sheets: sheetsRouter,
+  connectedAccounts: connectedAccountsRouter,
 });
 
 // export type definition of API

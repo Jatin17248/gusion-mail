@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/trpc/react";
-import { Star, Loader2, Plus } from "lucide-react";
+import { Star, Loader2, Plus, MessageSquare, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -81,6 +81,35 @@ export function ContactsSidePanel({ email, name }: { email: string; name: string
                 </p>
               </div>
             )}
+
+            {/* Interaction Stats */}
+            <div className="pt-3 border-t border-zinc-900/50 space-y-2">
+              {contact.interactionCount != null && (
+                <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <MessageSquare size={13} className="text-indigo-400 shrink-0" />
+                  <span>Interactions: <span className="text-zinc-200 font-medium">{contact.interactionCount}</span></span>
+                </div>
+              )}
+              {contact.lastInteractionAt && (
+                <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <Clock size={13} className="text-indigo-400 shrink-0" />
+                  <span>Last seen: <span className="text-zinc-200 font-medium">
+                    {(() => {
+                      const now = new Date();
+                      const then = new Date(contact.lastInteractionAt);
+                      const diffMs = now.getTime() - then.getTime();
+                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                      if (diffDays === 0) return "today";
+                      if (diffDays === 1) return "yesterday";
+                      if (diffDays < 7) return `${diffDays} days ago`;
+                      if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? "s" : ""} ago`;
+                      if (diffDays < 365) return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? "s" : ""} ago`;
+                      return `${Math.floor(diffDays / 365)} year${Math.floor(diffDays / 365) > 1 ? "s" : ""} ago`;
+                    })()}
+                  </span></span>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="pt-4 border-t border-zinc-900 space-y-3">

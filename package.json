@@ -41,6 +41,7 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.41.0",
     "framer-motion": "^12.40.0",
+    "googleapis": "^173.0.0",
     "isomorphic-dompurify": "^3.16.0",
     "lucide-react": "^1.18.0",
     "next": "^15.2.3",
@@ -49,6 +50,7 @@
     "posthog-js": "^1.386.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "resend": "^6.12.4",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "stripe": "^22.2.1",
@@ -58,6 +60,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4.0.15",
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",

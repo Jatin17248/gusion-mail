@@ -12,13 +12,59 @@ import { SuppressionListSettingsView } from "@/app/_components/suppression-setti
 import { BulkMergeView } from "@/app/_components/bulk-merge";
 import { TemplatesSettingsView } from "@/app/_components/templates-settings";
 import { ContactsSidePanel } from "@/app/_components/contacts-panel";
-import {
-  formatMessageDate,
-  formatSender,
-  formatEventWhen,
-  formatAttendees,
-  parseEmailAddress,
-} from "@/lib/display";
+import { ShortcutTutorial } from "@/app/_components/shortcut-tutorial";
+import { Sidebar } from "@/app/_components/dashboard/sidebar";
+import { InboxList } from "@/app/_components/dashboard/inbox-list";
+import { ReadingPane } from "@/app/_components/dashboard/reading-pane";
+import { CalendarView } from "@/app/_components/dashboard/calendar-view";
+import { TicketsView } from "@/app/_components/dashboard/support-queue";
+import { SubscriptionManager } from "@/app/_components/subscription-manager";
+import { ConnectedAccountsSettings } from "@/app/_components/connected-accounts-settings";
+
+export function formatMessageDate(dateStr: string | null) {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  return isToday
+    ? date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+export function parseEmailAddress(headerValue: string) {
+  const match = /^(.*)<(.*)>$/.exec(headerValue.trim());
+  if (match) {
+    return { name: match[1]!.replace(/"/g, "").trim(), email: match[2]!.trim() };
+  }
+  return { name: "", email: headerValue.trim() };
+}
+
+export function formatSender(headerValue: string) {
+  const { name, email } = parseEmailAddress(headerValue);
+  return name || email.split("@")[0] || headerValue;
+}
+
+export function formatEventWhen(start: { dateTime?: string; date?: string }, end: { dateTime?: string; date?: string }) {
+  if (!start) return "";
+  if (start.date) {
+    return new Date(start.date).toLocaleDateString();
+  }
+  if (start.dateTime && end.dateTime) {
+    const s = new Date(start.dateTime);
+    const e = new Date(end.dateTime);
+    const isSameDay = s.toDateString() === e.toDateString();
+    const timeStr = `${s.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} - ${e.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    return isSameDay ? `${s.toLocaleDateString()} ${timeStr}` : `${s.toLocaleDateString()} - ${e.toLocaleDateString()}`;
+  }
+  return "";
+}
+
+export function formatAttendees(attendees?: { email: string; responseStatus?: string }[]) {
+  if (!attendees || attendees.length === 0) return "No attendees";
+  const accepted = attendees.filter(a => a.responseStatus === "accepted").length;
+  return `${attendees.length} attendee${attendees.length > 1 ? "s" : ""} (${accepted} accepted)`;
+}
+
 import {
   Mail,
   Calendar as CalendarIcon,
@@ -42,6 +88,7 @@ import {
   Lock,
   FileSpreadsheet,
   Bell,
+  Loader2,
 } from "lucide-react";
 
 
@@ -67,6 +114,22 @@ export function Dashboard() {
   const [showSnoozeDropdown, setShowSnoozeDropdown] = useState(false);
   const [showSendLaterDropdown, setShowSendLaterDropdown] = useState(false);
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
+
+  // Multi-select state
+  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
+
+  const toggleEmailSelection = (id: string) => {
+    setSelectedEmailIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedEmailIds(new Set());
+  };
 
   // Undo Send state
   const [, setUndoActive] = useState(false);
@@ -94,17 +157,21 @@ export function Dashboard() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Realtime updates subscription via SSE
+  // Realtime updates subscription via WebSocket with SSE fallback
   useEffect(() => {
-    const eventSource = new EventSource("/api/realtime");
-
-    eventSource.onmessage = (event) => {
-      if (event.data === "connected" || event.data === "ping") {
-        return;
-      }
+    let ws: WebSocket | null = null;
+    let eventSource: EventSource | null = null;
+    
+    const handleMessage = (data: string) => {
+      if (data === "connected" || data === "ping") return;
       try {
-        const rawData = typeof event.data === "string" ? event.data : "";
-        const parsed = JSON.parse(rawData) as Record<string, unknown>;
+        const parsed = JSON.parse(data) as Record<string, unknown>;
+        
+        // Skip events meant for other users
+        if (parsed.userId && session?.user?.id && parsed.userId !== session.user.id) {
+          return;
+        }
+
         const eventType = typeof parsed.type === "string" ? parsed.type : "";
         const eventMsg = typeof parsed.message === "string" ? parsed.message : "Update received";
 
@@ -120,14 +187,46 @@ export function Dashboard() {
       }
     };
 
-    // Don't close on error: let the browser's EventSource auto-reconnect
-    // (e.g. when the serverless SSE function reaches its max duration).
-    eventSource.onerror = () => {
-      // transient; EventSource will retry automatically
+    const setupSSE = () => {
+      if (eventSource) return;
+      eventSource = new EventSource("/api/realtime");
+      eventSource.onmessage = (event) => {
+        handleMessage(typeof event.data === "string" ? event.data : "");
+      };
     };
 
+    const setupWS = () => {
+      try {
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          handleMessage(typeof event.data === "string" ? event.data : "");
+        };
+
+        ws.onerror = () => {
+          console.warn("WebSocket error, falling back to SSE");
+          if (ws) ws.close(); // Triggers onclose
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket connection closed, setting up SSE fallback.");
+          setupSSE();
+        };
+      } catch (err) {
+        console.warn("WebSocket initialization failed, falling back to SSE:", err);
+        setupSSE();
+      }
+    };
+
+    setupWS();
+
     return () => {
-      eventSource.close();
+      if (ws) {
+        ws.onclose = null; // Prevent fallback when unmounting
+        ws.close();
+      }
+      if (eventSource) eventSource.close();
     };
   }, [utils]);
 
@@ -516,653 +615,74 @@ export function Dashboard() {
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-50 overflow-hidden font-sans">
       {/* 1st Pane: Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
-        <div className="space-y-6">
-          {/* Logo */}
-          <div className="flex items-center gap-2 px-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
-              G
-            </div>
-            <span className="font-bold text-md tracking-tight text-zinc-100">Gusion Mail</span>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => setActiveTab("gmail")}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                activeTab === "gmail"
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <Mail size={16} />
-              <span>Emails</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("calendar")}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                activeTab === "calendar"
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <CalendarIcon size={16} />
-              <span>Calendar</span>
-            </button>
-            <button
-              onClick={() => {
-                setAgentOpen(!agentOpen);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                agentOpen
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <Sparkles size={16} />
-              <span>AI Agent</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("tickets");
-                setAgentOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                activeTab === "tickets"
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <HelpCircle size={16} />
-              <span>Support Queue</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("bulk");
-                setAgentOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                activeTab === "bulk"
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <FileSpreadsheet size={16} />
-              <span>Bulk Campaign</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("settings");
-                setAgentOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-                activeTab === "settings"
-                  ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              <Settings size={16} />
-              <span>Settings</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Footer info: Trial and Sign Out */}
-        <div className="space-y-4">
-          <div className="p-3 rounded-lg border border-indigo-500/10 bg-indigo-500/5 backdrop-blur-sm">
-            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 mb-1">
-              <Clock size={12} />
-              <span>Trial Active</span>
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              {trialDaysRemaining} days remaining in trial. Accessing all Pro features.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-zinc-900 pt-4 px-2">
-            <div className="flex items-center gap-2 min-w-0">
-              {session?.user?.image ? (
-                // eslint-disable-next-line @next/next/no-img-element -- external Google avatar; next/image would require remote-domain config
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? ""}
-                  className="w-7 h-7 rounded-full border border-zinc-800"
-                />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold">
-                  {session?.user?.name?.[0]}
-                </div>
-              )}
-              <span className="text-xs font-medium text-zinc-300 truncate">{session?.user?.name}</span>
-            </div>
-            <button
-              onClick={() => signOut()}
-              title="Sign Out"
-              className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        agentOpen={agentOpen}
+        setAgentOpen={setAgentOpen}
+        session={session}
+        trialDaysRemaining={trialDaysRemaining}
+      />
 
       {/* Main workspace (tabs) */}
       <div className="flex-1 flex overflow-hidden">
         {activeTab === "gmail" && (
           <>
             {/* 2nd Pane: Email List */}
-            <section className="w-[420px] flex-shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
-              {/* Header search / action */}
-              <div className="p-4 border-b border-zinc-900 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-md font-semibold text-zinc-200">Inbox</h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => refreshInbox.mutate()}
-                      disabled={refreshInbox.isPending}
-                      className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer disabled:opacity-50"
-                      title="Sync Inbox"
-                    >
-                      <RefreshCw size={14} className={refreshInbox.isPending ? "animate-spin" : ""} />
-                    </button>
-                    <button
-                      onClick={() => setComposeOpen(true)}
-                      className="px-2.5 py-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Plus size={12} />
-                      <span>Compose</span>
-                    </button>
-                  </div>
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
-                  <input
-                    type="text"
-                    placeholder="Search mail (e.g. subject, body)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-              </div>
-
-              {/* Split Inbox Tabs */}
-              <div className="flex border-b border-zinc-900 px-2 bg-zinc-950/20 text-xs">
-                <button
-                  onClick={() => setInboxTab("important")}
-                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
-                    inboxTab === "important"
-                      ? "border-indigo-500 text-indigo-400 font-semibold"
-                      : "border-transparent text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  Important
-                </button>
-                <button
-                  onClick={() => setInboxTab("other")}
-                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
-                    inboxTab === "other"
-                      ? "border-indigo-500 text-indigo-400 font-semibold"
-                      : "border-transparent text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  Other
-                </button>
-                <button
-                  onClick={() => setInboxTab("vip")}
-                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
-                    inboxTab === "vip"
-                      ? "border-indigo-500 text-indigo-400 font-semibold"
-                      : "border-transparent text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  VIP
-                </button>
-                <button
-                  onClick={() => setInboxTab("all")}
-                  className={`flex-1 py-2.5 text-center border-b-2 font-medium transition cursor-pointer ${
-                    inboxTab === "all"
-                      ? "border-indigo-500 text-indigo-400 font-semibold"
-                      : "border-transparent text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  All
-                </button>
-              </div>
-
-              {/* Emails List */}
-              <div className="flex-1 overflow-y-auto divide-y divide-zinc-900/50">
-                {emailsLoading ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-2">
-                    <LoaderIcon />
-                    <span className="text-xs">Loading inbox...</span>
-                  </div>
-                ) : !emails || emails.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-zinc-500">
-                    <span className="text-xs">No emails found</span>
-                  </div>
-                ) : (
-                  emails.map((email, idx) => (
-                    <div
-                      key={email.id}
-                      onClick={() => {
-                        setFocusedIndex(idx);
-                        setActiveMessageId(email.id);
-                        markRead.mutate({ id: email.id, read: true });
-                      }}
-                      className={`p-4 cursor-pointer text-left transition ${
-                        focusedIndex === idx
-                          ? "bg-indigo-500/5 border-l-2 border-indigo-500"
-                          : idx % 2 === 0
-                          ? "bg-zinc-900/5"
-                          : "bg-transparent"
-                      } hover:bg-zinc-900/20`}
-                    >
-                      <div className="flex justify-between items-start gap-2 mb-1">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className="text-xs font-semibold text-zinc-300 truncate max-w-[150px]">
-                            {parseEmailAddress(email.from).name || parseEmailAddress(email.from).email}
-                          </span>
-                          {email.priority && email.priority !== "normal" && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
-                              email.priority === "urgent"
-                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                                : email.priority === "high"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : "bg-zinc-800 text-zinc-400"
-                            }`}>
-                              {email.priority}
-                            </span>
-                          )}
-                          {email.category === "important" && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                              Important
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-zinc-500 whitespace-nowrap">
-                          {formatMessageDate(email.date)}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-semibold text-zinc-200 truncate mb-1">
-                        {email.subject || "(No Subject)"}
-                      </h4>
-                      <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                        {email.snippet}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
+            <InboxList
+              refreshInbox={refreshInbox}
+              setComposeOpen={setComposeOpen}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              inboxTab={inboxTab}
+              setInboxTab={setInboxTab}
+              emailsLoading={emailsLoading}
+              emails={emails ?? []}
+              focusedIndex={focusedIndex}
+              setFocusedIndex={setFocusedIndex}
+              setActiveMessageId={setActiveMessageId}
+              markRead={markRead}
+              archiveEmail={archiveEmail}
+              selectedEmailIds={selectedEmailIds}
+              toggleEmailSelection={toggleEmailSelection}
+              clearSelection={clearSelection}
+              LoaderIcon={Loader2}
+            />
 
             {/* 3rd Pane: Reading Pane */}
-            <section className="flex-1 flex flex-col bg-zinc-950">
-              {messageLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-2">
-                  <LoaderIcon />
-                  <span className="text-xs">Opening thread...</span>
-                </div>
-              ) : !selectedMessage ? (
-                <div className="flex-1 flex flex-col justify-start p-6 overflow-y-auto space-y-6">
-                  {/* Daily Brief Header */}
-                  <div className="p-5 rounded-2xl border border-zinc-900 bg-zinc-900/10 backdrop-blur-md relative overflow-hidden space-y-3">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-                    <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
-                      <Sparkles size={14} className="text-indigo-400" />
-                      Your Daily Briefing
-                    </h3>
-                    {dailyBriefData?.brief ? (
-                      <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap text-left font-medium">
-                        {dailyBriefData.brief}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-zinc-500 italic text-left">
-                        Scanning your inbox for important updates...
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 text-center">
-                    <div className="w-12 h-12 rounded-full border border-zinc-900 bg-zinc-900/20 flex items-center justify-center mb-4">
-                      <Mail size={20} />
-                    </div>
-                    <h3 className="text-sm font-semibold text-zinc-300 mb-1">No thread selected</h3>
-                    <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
-                      Select an email from the inbox list or press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400">Enter</kbd> to read a conversation.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex h-full overflow-hidden">
-                  <div className="flex-1 flex flex-col h-full border-r border-zinc-900">
-                    {/* Reading Pane Header */}
-                    <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-white mb-2 leading-snug">
-                        {selectedMessage.subject || "(No Subject)"}
-                      </h2>
-                      <div className="text-xs space-y-1">
-                        <div className="text-zinc-400">
-                          <span className="font-medium text-zinc-500">From: </span>
-                          {formatSender(selectedMessage.from)}
-                        </div>
-                        <div className="text-zinc-400">
-                          <span className="font-medium text-zinc-500">To: </span>
-                          {formatSender(selectedMessage.to)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 relative">
-                      <button
-                        onClick={() => {
-                          const d = new Date();
-                          d.setDate(d.getDate() + 2);
-                          createFollowUp.mutate({
-                            threadId: selectedMessage.threadId,
-                            sentMessageId: selectedMessage.id,
-                            remindAt: d,
-                          });
-                        }}
-                        disabled={createFollowUp.isPending}
-                        className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer disabled:opacity-50"
-                        title="Remind me if no reply (2 days)"
-                      >
-                        <Bell size={16} />
-                      </button>
-
-                      <button
-                        onClick={() => archiveEmail.mutate({ id: selectedMessage.id })}
-                        className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
-                        title="Archive Email (e)"
-                      >
-                        <Archive size={16} />
-                      </button>
-
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowSnoozeDropdown(!showSnoozeDropdown)}
-                          className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
-                          title="Snooze"
-                        >
-                          <Clock size={16} />
-                        </button>
-                        {showSnoozeDropdown && (
-                          <div className="absolute right-0 mt-2 w-64 p-3 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-2">
-                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Snooze Email Until</div>
-                            <button
-                              onClick={() => {
-                                const d = new Date();
-                                d.setHours(d.getHours() + 3);
-                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
-                                setShowSnoozeDropdown(false);
-                              }}
-                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
-                            >
-                              <span>Later today</span>
-                              <span className="text-[10px] text-zinc-550">
-                                {new Date(Date.now() + 3 * 3600 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                const d = new Date();
-                                d.setDate(d.getDate() + 1);
-                                d.setHours(8, 0, 0, 0);
-                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
-                                setShowSnoozeDropdown(false);
-                              }}
-                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
-                            >
-                              <span>Tomorrow morning</span>
-                              <span className="text-[10px] text-zinc-550">8:00 AM</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                const d = new Date();
-                                const daysToAdd = (1 + 7 - d.getDay()) % 7 || 7;
-                                d.setDate(d.getDate() + daysToAdd);
-                                d.setHours(8, 0, 0, 0);
-                                snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
-                                setShowSnoozeDropdown(false);
-                              }}
-                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-305 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
-                            >
-                              <span>Next week</span>
-                              <span className="text-[10px] text-zinc-550">Mon 8:00 AM</span>
-                            </button>
-                            <div className="border-t border-zinc-900 my-1" />
-                            <div className="px-1 space-y-1">
-                              <label className="block text-[9px] text-zinc-500 font-semibold">Custom date & time</label>
-                              <input
-                                type="datetime-local"
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    const d = new Date(e.target.value);
-                                    snoozeEmail.mutate({ id: selectedMessage.id, snoozeUntil: d });
-                                    setShowSnoozeDropdown(false);
-                                  }
-                                }}
-                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-850 rounded text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Reading Pane Body */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                    {/* AI Summary Card */}
-                    <div className="p-4 rounded-xl border border-indigo-500/10 bg-indigo-500/5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                          <Sparkles size={10} />
-                          AI Thread Summary
-                        </span>
-                        {!threadSummary && (
-                          <button
-                            onClick={() => summarizeThread.mutate({ threadId: selectedMessage.threadId })}
-                            disabled={summarizeThread.isPending}
-                            className="px-2.5 py-1 text-[10px] font-semibold bg-indigo-600/20 hover:bg-indigo-650 text-indigo-300 hover:text-white rounded transition cursor-pointer disabled:opacity-50"
-                          >
-                            {summarizeThread.isPending ? "Generating..." : "Generate Summary"}
-                          </button>
-                        )}
-                      </div>
-                      {threadSummary ? (
-                        <p className="text-xs text-zinc-300 leading-relaxed">
-                          {threadSummary}
-                        </p>
-                      ) : !summarizeThread.isPending ? (
-                        <p className="text-[11px] text-zinc-500 italic">
-                          Click above to generate a brief summary of this conversation.
-                        </p>
-                      ) : (
-                        <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
-                      )}
-                    </div>
-
-                    <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-                      <div
-                        dangerouslySetInnerHTML={{
-                          __html: DOMPurify.sanitize(selectedMessage.body),
-                        }}
-                      />
-                    </div>
-
-                    {/* Inline Reply Form */}
-                    <div className="pt-6 border-t border-zinc-900">
-                      <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Quick Reply</h4>
-
-                      {/* AI Smart Replies Suggestions */}
-                      {smartReplies.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {smartReplies.map((reply, index) => (
-                            <button
-                              key={index}
-                              onClick={() => setReplyBody(reply.body)}
-                              className="px-3 py-1.5 bg-zinc-900 hover:bg-indigo-600 border border-zinc-800 hover:border-indigo-500 text-zinc-300 hover:text-white text-xs rounded-full transition cursor-pointer text-left"
-                              title={reply.body}
-                            >
-                              💡 {reply.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="space-y-3">
-                        <textarea
-                          id="reply-input"
-                          placeholder="Write your reply here..."
-                          value={replyBody}
-                          onChange={(e) => setReplyBody(e.target.value)}
-                          rows={4}
-                          className="w-full p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition resize-none"
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => {
-                              const parentIdMatch = /Message-ID:\s*<([^>]+)>/i.exec(selectedMessage.body);
-                              const inReplyTo = parentIdMatch ? `<${parentIdMatch[1]!}>` : `<parent_message_id_placeholder>`;
-                              replyToEmail.mutate({
-                                to: parseEmailAddress(selectedMessage.from).email,
-                                subject: selectedMessage.subject,
-                                body: replyBody,
-                                threadId: selectedMessage.threadId,
-                                inReplyTo,
-                              });
-                            }}
-                            disabled={!replyBody.trim() || replyToEmail.isPending}
-                            className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <span>Send Reply</span>
-                            <Send size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    </div>
-                  </div>
-                  
-                  {/* Contacts Side Panel */}
-                  <div className="w-80 flex-shrink-0 flex flex-col h-full bg-zinc-950">
-                    <ContactsSidePanel 
-                      email={parseEmailAddress(selectedMessage.from).email} 
-                      name={parseEmailAddress(selectedMessage.from).name} 
-                    />
-                  </div>
-                </div>
-              )}
-            </section>
+            <ReadingPane
+              messageLoading={messageLoading}
+              selectedMessage={selectedMessage}
+              dailyBriefData={dailyBriefData}
+              createFollowUp={createFollowUp}
+              archiveEmail={archiveEmail}
+              showSnoozeDropdown={showSnoozeDropdown}
+              setShowSnoozeDropdown={setShowSnoozeDropdown}
+              snoozeEmail={snoozeEmail}
+              threadSummary={threadSummary}
+              summarizeThread={summarizeThread}
+              smartReplies={smartReplies}
+              replyBody={replyBody}
+              setReplyBody={setReplyBody}
+              replyToEmail={replyToEmail}
+              LoaderIcon={LoaderIcon}
+            />
           </>
         )}
 
         {activeTab === "calendar" && (
           /* Calendar Main View */
-          <section className="flex-1 flex flex-col bg-zinc-950">
-            {/* Calendar Header */}
-            <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-bold text-white">Calendar Schedule</h2>
-                <div className="flex items-center gap-1 border border-zinc-800 rounded-lg p-0.5 bg-zinc-900/30">
-                  <button
-                    onClick={() => setWeekOffset((prev) => prev - 1)}
-                    className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition cursor-pointer"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    onClick={() => setWeekOffset(0)}
-                    className="px-2 py-0.5 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition cursor-pointer font-medium"
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setWeekOffset((prev) => prev + 1)}
-                    className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition cursor-pointer"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => refreshEvents.mutate({ weekStart: weekRange.start, weekEnd: weekRange.end })}
-                  disabled={refreshEvents.isPending}
-                  className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer disabled:opacity-50"
-                  title="Sync Events"
-                >
-                  <RefreshCw size={14} className={refreshEvents.isPending ? "animate-spin" : ""} />
-                </button>
-                <button
-                  onClick={() => setCreateEventOpen(true)}
-                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1"
-                >
-                  <Plus size={12} />
-                  <span>Create Event</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Events view list / grid */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {eventsLoading ? (
-                <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-2">
-                  <LoaderIcon />
-                  <span className="text-xs">Loading schedule...</span>
-                </div>
-              ) : !events || events.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-zinc-500 text-center">
-                  <h3 className="text-sm font-semibold text-zinc-400 mb-1">No events scheduled</h3>
-                  <p className="text-xs text-zinc-500">You are free this week!</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {events.map((event) => (
-                    <div
-                      key={event.id}
-                      className="p-5 rounded-xl border border-zinc-900 bg-zinc-900/30 backdrop-blur-sm relative group flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex justify-between items-start gap-2 mb-2">
-                          <h4 className="text-sm font-bold text-zinc-100 truncate">{event.summary || "(No Title)"}</h4>
-                          <button
-                            onClick={() => deleteEvent.mutate({ id: event.id })}
-                            className="text-zinc-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                            title="Delete Event"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                        <p className="text-xs text-indigo-400 font-medium mb-3">
-                          {formatEventWhen(event.start, event.end)}
-                        </p>
-                        {event.location && (
-                          <p className="text-[11px] text-zinc-400 mb-2 truncate">
-                            <span className="font-semibold text-zinc-500">Location:</span> {event.location}
-                          </p>
-                        )}
-                        {event.description && (
-                          <p className="text-[11px] text-zinc-500 line-clamp-3 leading-relaxed mb-3">
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                      {event.attendees && event.attendees.length > 0 && (
-                        <div className="text-[10px] text-zinc-400 border-t border-zinc-900 pt-3 mt-3">
-                          <span className="font-semibold text-zinc-500">Attendees:</span>{" "}
-                          {formatAttendees(event.attendees)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <CalendarView
+            weekOffset={weekOffset}
+            setWeekOffset={setWeekOffset}
+            refreshEvents={refreshEvents}
+            weekRange={weekRange}
+            setCreateEventOpen={setCreateEventOpen}
+            eventsLoading={eventsLoading}
+            LoaderIcon={LoaderIcon}
+            events={events ?? []}
+            deleteEvent={deleteEvent}
+          />
         )}
 
         {activeTab === "settings" && <SettingsView />}
@@ -1299,7 +819,24 @@ export function Dashboard() {
                 <textarea
                   placeholder="Write your email body..."
                   value={composeBody}
-                  onChange={(e) => setComposeBody(e.target.value)}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    if (val.endsWith(" ")) {
+                      const regex = /\/([a-zA-Z0-9_-]+)\s$/;
+                      const match = regex.exec(val);
+                      if (match) {
+                        const shortcut = match[1];
+                        const template = templates?.find((t) => t.shortcut === shortcut);
+                        if (template) {
+                          val = val.replace(new RegExp(`/${shortcut}\\s$`), template.body + " ");
+                          if (template.subject && !composeSubject) {
+                            setComposeSubject(template.subject);
+                          }
+                        }
+                      }
+                    }
+                    setComposeBody(val);
+                  }}
                   rows={8}
                   className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition resize-none"
                 />
@@ -1531,6 +1068,9 @@ export function Dashboard() {
         open={agentOpen}
         onClose={() => setAgentOpen(false)}
       />
+
+      {/* Interactive Shortcut Tutorial */}
+      <ShortcutTutorial />
     </div>
   );
 }
@@ -1538,7 +1078,7 @@ export function Dashboard() {
 function SettingsView() {
   const { data: session } = useSession();
   const utils = api.useUtils();
-  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "templates" | "automations" | "developer" | "suppression">("general");
+  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "templates" | "automations" | "developer" | "suppression" | "billing" | "accounts">("general");
   const [inviteEmail, setInviteEmail] = useState("");
   const [referralCodeInput, setReferralCodeInput] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -1841,7 +1381,39 @@ function SettingsView() {
         >
           Suppression List
         </button>
+        <button
+          onClick={() => setSettingsSubTab("billing")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "billing"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Billing
+        </button>
+        <button
+          onClick={() => setSettingsSubTab("accounts")}
+          className={`pb-3 border-b-2 transition cursor-pointer ${
+            settingsSubTab === "accounts"
+              ? "border-indigo-500 text-indigo-400 font-bold"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Accounts
+        </button>
       </div>
+
+      {settingsSubTab === "billing" && (
+        <div className="max-w-3xl">
+          <SubscriptionManager />
+        </div>
+      )}
+
+      {settingsSubTab === "accounts" && (
+        <div className="max-w-3xl">
+          <ConnectedAccountsSettings />
+        </div>
+      )}
 
       {settingsSubTab === "general" && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
@@ -2487,186 +2059,3 @@ function LoaderIcon() {
   return <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />;
 }
 
-function TicketsView({
-  onOpenMessage,
-}: {
-  onOpenMessage: (messageId: string) => void;
-}) {
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-
-  const { data: ticketsData, isLoading: ticketsLoading, refetch: refetchTickets } = api.tickets.listTickets.useQuery();
-  const { data: teamMembers } = api.org.listMembers.useQuery();
-
-  const updateStatus = api.tickets.updateTicketStatus.useMutation({
-    onSuccess: () => {
-      toast.success("Ticket status updated!");
-      void refetchTickets();
-    },
-    onError: (err) => toast.error(err.message || "Failed to update status."),
-  });
-
-  const assignTicket = api.tickets.assignTicket.useMutation({
-    onSuccess: () => {
-      toast.success("Ticket assignee updated!");
-      void refetchTickets();
-    },
-    onError: (err) => toast.error(err.message || "Failed to assign ticket."),
-  });
-
-  const selectedTicket = useMemo(() => {
-    return ticketsData?.find((t) => t.id === selectedTicketId) ?? null;
-  }, [ticketsData, selectedTicketId]);
-
-  return (
-    <section className="flex-1 flex h-full overflow-hidden">
-      {/* Ticket List Pane */}
-      <div className="w-96 border-r border-zinc-900 flex flex-col bg-zinc-950/20 backdrop-blur-md">
-        <div className="p-6 border-b border-zinc-900 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-white">Support Tickets</h2>
-          <button
-            onClick={() => void refetchTickets()}
-            className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto divide-y divide-zinc-900/60">
-          {ticketsLoading ? (
-            <div className="p-6 text-zinc-500 text-xs text-center">Loading tickets...</div>
-          ) : !ticketsData || ticketsData.length === 0 ? (
-            <div className="p-6 text-zinc-500 text-xs text-center">No support tickets found.</div>
-          ) : (
-            ticketsData.map((ticket) => (
-              <button
-                key={ticket.id}
-                onClick={() => setSelectedTicketId(ticket.id)}
-                className={`w-full p-4 flex flex-col gap-1.5 transition text-left cursor-pointer ${
-                  selectedTicketId === ticket.id ? "bg-zinc-900/40" : "hover:bg-zinc-900/10"
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
-                    {ticket.publicId}
-                  </span>
-                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded uppercase ${
-                    ticket.status === "open"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : ticket.status === "pending"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : "bg-zinc-800 text-zinc-500 border border-zinc-700"
-                  }`}>
-                    {ticket.status}
-                  </span>
-                </div>
-                <div className="text-xs font-bold text-zinc-200 truncate">{ticket.subject}</div>
-                <div className="text-[10px] text-zinc-400 truncate">From: {ticket.fromName ?? ticket.fromEmail}</div>
-                <div className="text-[9px] text-zinc-500 truncate mt-1">
-                  {ticket.assignedUser ? `Assigned to: ${ticket.assignedUser.name}` : "Unassigned"}
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Ticket Reading / Actions Pane */}
-      <div className="flex-1 flex flex-col bg-zinc-950/40 backdrop-blur-md overflow-hidden">
-        {!selectedTicket ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-zinc-650 text-center">
-            <HelpCircle size={32} className="mb-3 text-zinc-750" />
-            <h3 className="text-sm font-semibold text-zinc-300 mb-1">No ticket selected</h3>
-            <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
-              Select a ticket from the left panel to manage status, assignments, and view conversations.
-            </p>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col h-full overflow-hidden text-left">
-            {/* Header */}
-            <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 px-2 py-0.5 rounded">
-                    {selectedTicket.publicId}
-                  </span>
-                  <span className="text-zinc-500 text-xs">
-                    {new Date(selectedTicket.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <h2 className="text-lg font-bold text-white">{selectedTicket.subject}</h2>
-                <div className="text-xs text-zinc-400 mt-2">
-                  <span className="text-zinc-550 font-medium">Customer: </span>
-                  {selectedTicket.fromName ? `${selectedTicket.fromName} (${selectedTicket.fromEmail})` : selectedTicket.fromEmail}
-                </div>
-              </div>
-            </div>
-
-            {/* Actions Panel */}
-            <div className="p-6 border-b border-zinc-900 grid grid-cols-2 gap-4 bg-zinc-950/20">
-              <div>
-                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Ticket Status</label>
-                <select
-                  value={selectedTicket.status}
-                  onChange={(e) => updateStatus.mutate({ id: selectedTicket.id, status: e.target.value as "open" | "pending" | "resolved" })}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
-                >
-                  <option value="open">Open</option>
-                  <option value="pending">Pending</option>
-                  <option value="resolved">Resolved</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Assignee</label>
-                <select
-                  value={selectedTicket.assignedUserId ?? ""}
-                  onChange={(e) => assignTicket.mutate({ id: selectedTicket.id, userId: e.target.value || null })}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
-                >
-                  <option value="">Unassigned</option>
-                  {teamMembers?.map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {member.name} ({member.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Details & Conversation Link */}
-            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Ticket Description (Snippet)</h4>
-                <div className="p-4 rounded-xl border border-zinc-900 bg-zinc-950/30 text-xs text-zinc-300 leading-relaxed italic">
-                  &quot;{selectedTicket.snippet ?? "No description provided."}&quot;
-                </div>
-              </div>
-
-              {selectedTicket.gmailMessageId && (
-                <div className="p-4 rounded-xl border border-indigo-500/10 bg-indigo-500/5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-indigo-400" />
-                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Superhuman Email Client Integration</span>
-                  </div>
-                  <p className="text-zinc-400 text-xs leading-relaxed">
-                    This support ticket is linked directly to an active email thread in your inbox. Open it to write an AI-powered reply, snooze, or archive the thread.
-                  </p>
-                  <button
-                    onClick={() => {
-                      if (selectedTicket.gmailMessageId) {
-                        onOpenMessage(selectedTicket.gmailMessageId);
-                      }
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Mail size={12} />
-                    <span>Open Email Conversation</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}

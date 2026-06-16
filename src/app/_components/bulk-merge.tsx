@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import { FileSpreadsheet, Plus, Play, Info, Eye, Activity, X } from "lucide-react";
@@ -20,6 +20,36 @@ export function BulkMergeView() {
     rows: [],
   });
   const [previewIdx, setPreviewIdx] = useState(0);
+
+  // Google Sheets integration
+  const { data: sheetsList, isLoading: sheetsLoading } = api.sheets.listSpreadsheets.useQuery();
+  const [selectedSheetId, setSelectedSheetId] = useState<string>("");
+  const { data: sheetMeta } = api.sheets.getSpreadsheetMetadata.useQuery(
+    { spreadsheetId: selectedSheetId },
+    { enabled: !!selectedSheetId }
+  );
+  
+  const range = sheetMeta?.sheets?.[0]?.properties?.title ? `${sheetMeta.sheets[0].properties.title}` : "Sheet1";
+  const { data: sheetData, isFetching: dataLoading } = api.sheets.getSpreadsheetData.useQuery(
+    { spreadsheetId: selectedSheetId, range },
+    { enabled: !!selectedSheetId && !!sheetMeta }
+  );
+
+  useEffect(() => {
+    if (sheetData && sheetData.length > 0) {
+      const headers = (sheetData[0] as unknown[]).map(h => String(h).trim());
+      const rows = sheetData.slice(1).map(rowArr => {
+        const row = rowArr as unknown[];
+        const rowObj: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = String(row[idx] ?? "").trim();
+        });
+        return rowObj;
+      });
+      setParsedData({ headers, rows });
+      setCsvText(`Loaded ${rows.length} rows from Google Sheets.`);
+    }
+  }, [sheetData]);
 
   // Queries for details
   const { data: campaignDetails } = api.bulk.getCampaignDetails.useQuery(
@@ -346,34 +376,56 @@ export function BulkMergeView() {
                   </div>
                 </div>
 
-                {/* CSV Input */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-xs font-semibold text-zinc-400">CSV List (Headers: email, name, etc.)</label>
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="csv-file-upload"
-                    />
-                    <label
-                      htmlFor="csv-file-upload"
-                      className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                {/* CSV Input or Google Sheet */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-zinc-400">Import Contacts</label>
+                    
+                    <select
+                      value={selectedSheetId}
+                      onChange={(e) => setSelectedSheetId(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
                     >
-                      Upload .csv File
-                    </label>
+                      <option value="">-- Select a Google Sheet --</option>
+                      {sheetsLoading && <option disabled>Loading sheets...</option>}
+                      {sheetsList?.map((sheet) => (
+                        <option key={sheet.id} value={sheet.id ?? ""}>
+                          {sheet.name} ({(sheet.modifiedTime ? new Date(sheet.modifiedTime).toLocaleDateString() : "")})
+                        </option>
+                      ))}
+                    </select>
+                    {dataLoading && <div className="text-[10px] text-indigo-400 animate-pulse">Fetching sheet data...</div>}
                   </div>
-                  <textarea
-                    placeholder="email,firstName,company&#10;customer@gmail.com,Alice,Google"
-                    value={csvText}
-                    onChange={(e) => {
-                      setCsvText(e.target.value);
-                      handleCSVParse(e.target.value);
-                    }}
-                    rows={4}
-                    className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 font-mono focus:outline-none focus:border-indigo-500"
-                  />
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center mt-2">
+                      <label className="block text-xs font-semibold text-zinc-400">Or Paste CSV (Headers: email, name, etc.)</label>
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="csv-file-upload"
+                      />
+                      <label
+                        htmlFor="csv-file-upload"
+                        className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                      >
+                        Upload .csv File
+                      </label>
+                    </div>
+                    <textarea
+                      placeholder="email,firstName,company&#10;customer@gmail.com,Alice,Google"
+                      value={csvText}
+                      onChange={(e) => {
+                        setCsvText(e.target.value);
+                        setSelectedSheetId(""); // Clear sheet selection when typing CSV
+                        handleCSVParse(e.target.value);
+                      }}
+                      rows={4}
+                      className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-855 rounded-lg text-xs text-zinc-200 font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                 </div>
               </div>
 

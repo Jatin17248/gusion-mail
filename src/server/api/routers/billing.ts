@@ -62,8 +62,8 @@ export const billingRouter = createTRPCRouter({
   createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
     trackEvent(ctx.session.user.id, "payu_portal_opened");
     // PayU does not have a drop-in customer portal like Stripe.
-    // For now, we return a mock URL. You would integrate PayU's subscription management API here.
-    return { url: `${env.NEXT_PUBLIC_APP_URL}?mock_payu_portal=active` };
+    // We redirect to our own billing dashboard tab.
+    return { url: `${env.NEXT_PUBLIC_APP_URL}/dashboard?tab=billing` };
   }),
 
   getSubscription: protectedProcedure.query(async ({ ctx }) => {

@@ -401,4 +401,33 @@ export const suppressionList = pgTable("suppression_list", {
   },
 ]);
 
+export const sharedMailboxes = pgTable("shared_mailboxes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  connectionStatus: text("connection_status").default("pending"), // 'connected' | 'pending' | 'failed'
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
 
+export const ticketEvents = pgTable("ticket_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ticketId: text("ticket_id")
+    .notNull()
+    .references(() => tickets.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "set null" }), // User who performed the action
+  type: text("type").notNull(), // 'note' | 'status_change' | 'assignment'
+  content: text("content"), // The internal note or the details of the change
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const connectedAccounts = pgTable("connected_accounts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("google"),
+  email: text("email").notNull(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});

@@ -24,6 +24,14 @@ export async function publishUserEvent(
 ): Promise<void> {
   const payload: StoredUserEvent = { ...event, ts: Date.now() };
   await redis.set(`realtime:${userId}`, payload, { ex: 120 });
+  
+  try {
+    const wsMessage = JSON.stringify({ userId, ...payload });
+    // @ts-expect-error - publish might not be typed properly depending on redis client
+    await redis.publish("app_events", wsMessage);
+  } catch (err) {
+    console.error("Failed to publish to app_events channel:", err);
+  }
 }
 
 export async function getLatestUserEvent(
