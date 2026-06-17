@@ -19,11 +19,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-zinc-950 text-zinc-50 antialiased min-h-screen selection:bg-indigo-500 selection:text-white`}>
+      <body className={`${inter.className} antialiased min-h-screen`}>
         <SessionProvider>
           <TRPCReactProvider>
             {children}
-            <Toaster position="bottom-right" theme="dark" closeButton richColors />
+            <Toaster position="bottom-right" closeButton richColors />
           </TRPCReactProvider>
         </SessionProvider>
       </body>

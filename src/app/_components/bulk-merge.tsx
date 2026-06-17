@@ -42,7 +42,8 @@ export function BulkMergeView() {
         const row = rowArr as unknown[];
         const rowObj: Record<string, string> = {};
         headers.forEach((h, idx) => {
-          rowObj[h] = String(row[idx] ?? "").trim();
+          const val = row[idx];
+          rowObj[h] = val != null ? String(val as any).trim() : "";
         });
         return rowObj;
       });
@@ -217,7 +218,7 @@ export function BulkMergeView() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span
                         className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase ${
                           campaign.status === "completed"
@@ -286,13 +287,13 @@ export function BulkMergeView() {
 
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold text-zinc-400">Recipient List Status</h4>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-75 overflow-y-auto pr-1">
                   {campaignDetails.recipients.map((recipient) => (
                     <div key={recipient.id} className="p-2.5 rounded border border-zinc-855 bg-zinc-950/20 text-xs flex justify-between items-center gap-4">
                       <span className="text-zinc-350 font-medium truncate">{recipient.email}</span>
                       <div className="flex items-center gap-2">
                         {recipient.error && (
-                          <span className="text-[9px] text-rose-400/90 max-w-[100px] truncate" title={recipient.error}>
+                          <span className="text-[9px] text-rose-400/90 max-w-[25] truncate" title={recipient.error}>
                             {recipient.error}
                           </span>
                         )}
@@ -485,7 +486,7 @@ export function BulkMergeView() {
                       <div className="text-[11px] space-y-1">
                         <div className="text-zinc-500"><span className="font-bold">To:</span> {currentPreviewEmail.to}</div>
                         <div className="text-zinc-500"><span className="font-bold">Subject:</span> {currentPreviewEmail.subject}</div>
-                        <div className="text-zinc-300 mt-2 bg-zinc-950/60 p-3 rounded-lg font-sans whitespace-pre-wrap border border-zinc-900/60 max-h-[160px] overflow-y-auto">
+                        <div className="text-zinc-300 mt-2 bg-zinc-950/60 p-3 rounded-lg font-sans whitespace-pre-wrap border border-zinc-900/60 max-h-40 overflow-y-auto">
                           {currentPreviewEmail.body}
                         </div>
                       </div>

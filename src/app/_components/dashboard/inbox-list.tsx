@@ -16,7 +16,10 @@ interface InboxListProps {
   setFocusedIndex: (index: number) => void;
   setActiveMessageId: (id: string | null) => void;
   markRead: { mutate: (args: { id: string; read: boolean }) => void };
-  archiveEmail: { mutate: (args: { id: string }) => void };
+  archiveEmail: {
+    mutate: (args: { id: string }) => void;
+    mutateAsync: (args: { id: string }) => Promise<any>;
+  };
   selectedEmailIds: Set<string>;
   toggleEmailSelection: (id: string) => void;
   clearSelection: () => void;
@@ -160,7 +163,7 @@ export function InboxList({
               onClick={() => {
                 const arr = Array.from(selectedEmailIds);
                 // We run in parallel to archive them all. In a real app we'd have a bulkArchive procedure.
-                Promise.all(arr.map(id => archiveEmail.mutate({ id }))).then(() => {
+                void Promise.all(arr.map(id => archiveEmail.mutateAsync({ id }))).then(() => {
                   clearSelection();
                   toast.success(`Archived ${arr.length} emails`);
                 });

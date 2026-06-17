@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/* Smooth scroll for anchor navigation */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Landing page body resets — the landing component sets its own bg/text */
+/* Dashboard and onboarding components set their own dark backgrounds */
