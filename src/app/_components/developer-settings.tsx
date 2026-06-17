@@ -224,7 +224,7 @@ export function DeveloperSettingsView() {
                       </div>
                       <button
                         onClick={() => deleteKey.mutate({ id: key.id })}
-                        className="p-1.5 hover:bg-zinc-900 rounded text-zinc-500 hover:text-rose-400 transition cursor-pointer flex-shrink-0"
+                        className="p-1.5 hover:bg-zinc-900 rounded text-zinc-500 hover:text-rose-400 transition cursor-pointer shrink-0"
                         title="Revoke Key"
                       >
                         <Trash2 size={13} />
@@ -324,7 +324,7 @@ export function DeveloperSettingsView() {
                           e.stopPropagation();
                           deleteWebhook.mutate({ id: wh.id });
                         }}
-                        className="p-1.5 hover:bg-zinc-900 rounded text-zinc-500 hover:text-rose-400 transition cursor-pointer flex-shrink-0"
+                        className="p-1.5 hover:bg-zinc-900 rounded text-zinc-500 hover:text-rose-400 transition cursor-pointer shrink-0"
                         title="Delete Webhook"
                       >
                         <Trash2 size={13} />

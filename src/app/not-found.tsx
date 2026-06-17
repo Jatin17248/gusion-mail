@@ -72,7 +72,7 @@ export default function NotFound() {
     }));
 
     return (
-        <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#f8f9ff] via-[#e8f4ff] to-[#fff8f0] dark:from-[#0a0a0f] dark:via-[#0f1419] dark:to-[#0a0a0f]">
+        <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-linear-to-br from-[#f8f9ff] via-[#e8f4ff] to-[#fff8f0] dark:from-[#0a0a0f] dark:via-[#0f1419] dark:to-[#0a0a0f]">
             {/* Animated background orbs */}
             <GradientOrb className="w-96 h-96 bg-[#0067ff] -top-20 -left-20" />
             <GradientOrb className="w-80 h-80 bg-[#00d4ff] -bottom-10 -right-10" />
@@ -106,7 +106,7 @@ export default function NotFound() {
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.6, delay: 0.2 }}
                 >
-                    <h1 className="text-[140px] sm:text-[180px] md:text-[220px] font-black leading-none tracking-tighter bg-gradient-to-br from-[#0067ff] via-[#00a3ff] to-[#00d4ff] bg-clip-text text-transparent select-none">
+                    <h1 className="text-[140px] sm:text-[180px] md:text-[220px] font-black leading-none tracking-tighter bg-linear-to-br from-[#0067ff] via-[#00a3ff] to-[#00d4ff] bg-clip-text text-transparent select-none">
                         404
                     </h1>
 
@@ -169,12 +169,12 @@ export default function NotFound() {
                 >
                     <Link href="/">
                         <motion.button
-                            className="group relative px-8 py-4 bg-gradient-to-r from-[#0067ff] to-[#0052cc] text-white font-semibold rounded-xl shadow-xl shadow-[#0067ff]/25 hover:shadow-2xl hover:shadow-[#0067ff]/30 transition-all duration-300 overflow-hidden cursor-pointer"
+                            className="group relative px-8 py-4 bg-linear-to-r from-[#0067ff] to-[#0052cc] text-white font-semibold rounded-xl shadow-xl shadow-[#0067ff]/25 hover:shadow-2xl hover:shadow-[#0067ff]/30 transition-all duration-300 overflow-hidden cursor-pointer"
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                         >
                             {/* Shimmer effect */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                            <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
 
                             <span className="relative flex items-center gap-2">
                                 <svg

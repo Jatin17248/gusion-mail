@@ -11,10 +11,10 @@ export function Landing() {
       {/* Header */}
       <header className="container mx-auto px-6 py-6 flex items-center justify-between border-b border-zinc-900">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+          <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
             G
           </div>
-          <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+          <span className="font-bold text-lg tracking-tight bg-linear-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
             Gusion Mail
           </span>
         </div>
@@ -37,7 +37,7 @@ export function Landing() {
 
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-white max-w-4xl leading-[1.15] mb-6">
           The AI command center for{" "}
-          <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-400 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-indigo-400 via-violet-400 to-purple-400 bg-clip-text text-transparent">
             email & calendar
           </span>
         </h1>
@@ -49,7 +49,7 @@ export function Landing() {
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-16">
           <button
             onClick={() => signIn("google")}
-            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-medium rounded-xl shadow-xl shadow-indigo-500/20 transition transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-8 py-4 bg-linear-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-medium rounded-xl shadow-xl shadow-indigo-500/20 transition transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2"
           >
             <span>Get Started with Google</span>
             <span className="text-indigo-200">→</span>

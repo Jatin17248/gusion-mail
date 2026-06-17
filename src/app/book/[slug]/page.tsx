@@ -209,7 +209,7 @@ export default function BookPage({ params }: PageProps) {
             <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-500">Host</p>
             <h2 className="text-lg font-bold text-zinc-200">{data.hostName}</h2>
             
-            <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-zinc-50 bg-gradient-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-zinc-50 bg-linear-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
               {data.link.title}
             </h1>
             
@@ -258,7 +258,7 @@ export default function BookPage({ params }: PageProps) {
                         <button
                           key={dateStr}
                           onClick={() => setSelectedDateStr(dateStr)}
-                          className={`flex-shrink-0 snap-start flex flex-col items-center justify-center w-24 h-20 rounded-xl border transition-all ${
+                          className={`shrink-0 snap-start flex flex-col items-center justify-center w-24 h-20 rounded-xl border transition-all ${
                             isSelected
                               ? "bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-950/20"
                               : "border-zinc-800 bg-zinc-950/20 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"

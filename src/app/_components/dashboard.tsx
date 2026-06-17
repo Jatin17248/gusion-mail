@@ -1621,7 +1621,7 @@ function SettingsView() {
                           {link.durationMins}m duration · {link.bufferMins}m buffer
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => toggleLink.mutate({ id: link.id, isActive: !link.isActive })}
                           className={`px-2 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
@@ -1713,7 +1713,7 @@ function SettingsView() {
                           {contact.interactionCount} interactions
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => toggleVipContact.mutate({ email: contact.email, isVip: !contact.isVip })}
                           className={`px-2 py-1 text-[10px] font-semibold rounded transition cursor-pointer ${
@@ -1787,7 +1787,7 @@ function SettingsView() {
                         <div className="text-xs font-bold text-zinc-200 truncate">{member.name || member.email}</div>
                         <div className="text-[10px] text-zinc-550 truncate mt-0.5">{member.email}</div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         {member.role === "owner" ? (
                           <span className="px-2 py-0.5 text-[9px] bg-zinc-800 text-zinc-400 border border-zinc-700 rounded capitalize font-medium">
                             Owner

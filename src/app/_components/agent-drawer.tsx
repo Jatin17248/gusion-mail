@@ -114,7 +114,7 @@ export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
   if (!open) return null;
 
   return (
-    <aside className="w-96 flex-shrink-0 border-l border-zinc-900 bg-zinc-950/70 backdrop-blur-xl flex flex-col h-screen animate-in slide-in-from-right duration-300">
+    <aside className="w-96 shrink-0 border-l border-zinc-900 bg-zinc-950/70 backdrop-blur-xl flex flex-col h-screen animate-in slide-in-from-right duration-300">
       {/* Header */}
       <div className="p-4 border-b border-zinc-900 flex items-center justify-between">
         <div className="flex items-center gap-2">

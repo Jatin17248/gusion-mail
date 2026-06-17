@@ -1,9 +1,167 @@
 @import "tailwindcss";
 
+@theme {
+  /* Override indigo shades to use reputation-management brand blue (#0067ff) */
+  --color-indigo-50: color-mix(in srgb, #0067ff 5%, white);
+  --color-indigo-100: color-mix(in srgb, #0067ff 10%, white);
+  --color-indigo-200: color-mix(in srgb, #0067ff 20%, white);
+  --color-indigo-300: color-mix(in srgb, #0067ff 35%, white);
+  --color-indigo-400: color-mix(in srgb, #0067ff 60%, white);
+  --color-indigo-500: #0067ff;
+  --color-indigo-600: #0056d6;
+  --color-indigo-700: #0046b0;
+  --color-indigo-800: #00368a;
+  --color-indigo-900: #002763;
+  --color-indigo-950: #001330;
+
+  /* Override purple/violet shades to use reputation-management accent red (#e61f2a) */
+  --color-purple-50: color-mix(in srgb, #e61f2a 5%, white);
+  --color-purple-100: color-mix(in srgb, #e61f2a 10%, white);
+  --color-purple-200: color-mix(in srgb, #e61f2a 20%, white);
+  --color-purple-300: color-mix(in srgb, #e61f2a 35%, white);
+  --color-purple-400: color-mix(in srgb, #e61f2a 60%, white);
+  --color-purple-500: #e61f2a;
+  --color-purple-600: #cf1c26;
+  --color-purple-700: #b81922;
+  --color-purple-800: #a1161d;
+  --color-purple-900: #8a1319;
+  --color-purple-950: #4d0b0e;
+
+  --color-violet-50: color-mix(in srgb, #e61f2a 5%, white);
+  --color-violet-100: color-mix(in srgb, #e61f2a 10%, white);
+  --color-violet-200: color-mix(in srgb, #e61f2a 20%, white);
+  --color-violet-300: color-mix(in srgb, #e61f2a 35%, white);
+  --color-violet-400: color-mix(in srgb, #e61f2a 60%, white);
+  --color-violet-500: #e61f2a;
+  --color-violet-600: #cf1c26;
+  --color-violet-700: #b81922;
+  --color-violet-800: #a1161d;
+  --color-violet-900: #8a1319;
+  --color-violet-950: #4d0b0e;
+
+  /* Custom variables mapping */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Add custom animation keys for floating animations & marquee from wapi final */
+  --animate-bob1: bob1 5s ease-in-out infinite;
+  --animate-bob2: bob2 6s ease-in-out infinite;
+  --animate-bob3: bob3 7s ease-in-out infinite;
+  --animate-phone: phoneEntry 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-msg: msgEntry 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-typing: typing 0.8s ease-in-out infinite alternate;
+  --animate-marquee: marquee 30s linear infinite;
+  --animate-badge-glow: badgeGlow 4s ease-in-out infinite;
+
+  @keyframes bob1 {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-8px) rotate(-1.5deg); }
+  }
+  @keyframes bob2 {
+    0%, 100% { transform: translateY(0) rotate(1deg); }
+    50% { transform: translateY(-10px) rotate(2deg); }
+  }
+  @keyframes bob3 {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-6px) rotate(-2deg); }
+  }
+  @keyframes phoneEntry {
+    from { transform: translateY(40px) rotate(-6deg); opacity: 0; }
+    to { transform: translateY(0) rotate(-2deg); opacity: 1; }
+  }
+  @keyframes msgEntry {
+    from { transform: scale(0.95) translateY(10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  @keyframes typing {
+    from { transform: translateY(0); opacity: 0.4; }
+    to { transform: translateY(-4px); opacity: 1; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes badgeGlow {
+    0%, 100% { border-color: rgba(0, 103, 255, 0.15); box-shadow: 0 0 0 0 rgba(0, 103, 255, 0); }
+    50% { border-color: rgba(0, 103, 255, 0.3); box-shadow: 0 0 12px 2px rgba(0, 103, 255, 0.04); }
+  }
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: #012b57;
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+}
+
 /* Smooth scroll for anchor navigation */
 html {
   scroll-behavior: smooth;
 }
 
-/* Landing page body resets — the landing component sets its own bg/text */
-/* Dashboard and onboarding components set their own dark backgrounds */
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -55,7 +55,7 @@ export function InboxList({
   });
 
   return (
-    <section className="w-[420px] flex-shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
+    <section className="w-[420px] shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
       {/* Header search / action */}
       <div className="p-4 border-b border-zinc-900 space-y-3">
         <div className="flex items-center justify-between">

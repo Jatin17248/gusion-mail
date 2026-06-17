@@ -45,7 +45,7 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
       <div className="w-full max-w-lg overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/90 shadow-2xl backdrop-blur-md">
         <Command label="Global Command Menu" className="w-full">
           <div className="flex items-center border-b border-zinc-800 px-3 gap-2">
-            <Search className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+            <Search className="h-4 w-4 text-zinc-500 shrink-0" />
             <Command.Input
               value={value}
               onValueChange={setValue}

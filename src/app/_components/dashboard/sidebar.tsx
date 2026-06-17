@@ -28,11 +28,11 @@ export function Sidebar({
   trialDaysRemaining,
 }: SidebarProps) {
   return (
-    <aside className="w-64 flex-shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
+    <aside className="w-64 shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
       <div className="space-y-6">
         {/* Logo */}
         <div className="flex items-center gap-2 px-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
+          <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
             G
           </div>
           <span className="font-bold text-md tracking-tight text-zinc-100">Gusion Mail</span>

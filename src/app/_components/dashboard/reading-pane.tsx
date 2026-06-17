@@ -112,7 +112,7 @@ export function ReadingPane({
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 relative">
+            <div className="flex items-center gap-2 shrink-0 relative">
               <div className="relative">
                 <button
                   onClick={() => setShowFollowUpDropdown(!showFollowUpDropdown)}
@@ -326,7 +326,7 @@ export function ReadingPane({
           </div>
           
           {/* Contacts Side Panel */}
-          <div className="w-80 flex-shrink-0 flex flex-col h-full bg-zinc-950 border-l border-zinc-900">
+          <div className="w-80 shrink-0 flex flex-col h-full bg-zinc-950 border-l border-zinc-900">
             <ContactsSidePanel 
               email={parseEmailAddress(selectedMessage.from).email} 
               name={parseEmailAddress(selectedMessage.from).name} 

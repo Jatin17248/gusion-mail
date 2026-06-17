@@ -1,418 +1,470 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState, useEffect, useRef } from "react";
-import { motion, useInView, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import Link from "next/link";
 import {
   Keyboard,
   Cpu,
   Zap,
   ShieldCheck,
   Calendar,
-  Mail,
   Sparkles,
-  MessageSquare,
-  Clock,
-  Search,
-  FileText,
-  BellRing,
   ArrowRight,
-  Check,
   ChevronDown,
   Command,
-  Star,
-  Users,
   Bot,
   Send,
-  Sunrise,
-  Link2,
   Layers,
-  Timer,
-  MailPlus,
+  CheckCircle2,
+  Code,
+  CheckCircle,
+  ExternalLink,
 } from "lucide-react";
 
-/* ─── animation helpers ─── */
-const fadeUp = {
-  hidden: { opacity: 0, y: 32 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] },
-  }),
-};
+/* ─── DATA STRUCTURES ─── */
 
-const stagger = {
-  visible: { transition: { staggerChildren: 0.08 } },
-};
-
-function FadeIn({
-  children,
-  className,
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 28 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{
-        delay,
-        duration: 0.6,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-/* ─── data ─── */
-const NAV_LINKS = [
+const NAV_ITEMS = [
   { label: "Features", href: "#features" },
+  // { label: "Bento Grid", href: "#bento" },
+  { label: "How It Works", href: "#how-it-works" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
+];
+
+const STATS = [
+  { value: "1.2s", label: "Average AI reply generation time" },
+  { value: "489K+", label: "Productive emails sent this month" },
+  { value: "85%", label: "Average time saved on inbox management" },
+  { value: "10x", label: "Increase in keyboard-shortcut navigation speed" },
 ];
 
 const PILLARS = [
   {
     icon: Keyboard,
-    color: "from-indigo-500 to-indigo-600",
-    bg: "bg-indigo-50",
+    title: "Superhuman Navigation",
+    desc: "Archive, reply, snooze, or search with zero mouse clicks. Command palette, customizable shortcuts, and optimistic UI that loads instantly.",
+    bg: "bg-indigo-50/50",
     iconColor: "text-indigo-600",
-    title: "Superhuman Speed",
-    desc: "Archive, reply, snooze, or navigate your entire inbox without touching a mouse. Cmd+K command palette, J/K navigation, and optimistic UI that feels instant.",
   },
   {
     icon: Bot,
-    color: "from-violet-500 to-purple-600",
-    bg: "bg-violet-50",
-    iconColor: "text-violet-600",
-    title: "AI That Actually Works",
-    desc: 'Say "invite Sarah Thursday 9am and email her I\'m looking forward to it" — and it\'s done. Priority inbox, smart replies, thread summaries, and a daily brief.',
-  },
-  {
-    icon: Calendar,
-    color: "from-emerald-500 to-teal-600",
-    bg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
-    title: "Scheduling Built In",
-    desc: "Day, week, and month calendar views. Share public booking links (like Calendly), create events from natural language, and invite attendees in one keystroke.",
-  },
-];
-
-const FEATURES = [
-  {
-    icon: Layers,
-    color: "text-indigo-600",
-    bg: "bg-indigo-50",
-    title: "Split Inbox & Smart Triage",
-    desc: "Your inbox, organized by AI. Important messages rise to the top. Newsletters, updates, and noise get sorted automatically. Archive, snooze, or star in one keystroke with instant undo.",
-    bullets: [
-      "AI-powered priority badges (Urgent / Important / FYI)",
-      "Smart views: Important, Other, VIP, Newsletters",
-      "One-key archive, star, snooze & undo send",
-      "Optimistic UI — every action feels instant",
-    ],
-  },
-  {
-    icon: Bot,
-    color: "text-violet-600",
-    bg: "bg-violet-50",
-    title: "AI Agent Chat",
-    desc: 'The flagship feature. Talk to your inbox in plain English. "Draft a follow-up to the budget thread," "find a time with the team next week," or "send a polite decline." The agent proposes actions, you confirm.',
-    bullets: [
-      "Natural language → real email & calendar actions",
-      "Multi-step workflows in a single conversation",
-      "Propose-then-confirm safety gate",
-      "Full audit log of every AI action",
-    ],
+    title: "AI Draft Agent",
+    desc: 'Describe your reply in plain text—"Accept the meeting but keep it under 30 minutes"—and watch a professional response write itself in real time.',
+    bg: "bg-purple-50/50",
+    iconColor: "text-purple-600",
   },
   {
     icon: Sparkles,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-    title: "AI Compose & Smart Reply",
-    desc: "Write emails in seconds, not minutes. Describe what you want to say and the AI drafts it in your tone. Or pick from instant smart reply suggestions on any incoming email.",
-    bullets: [
-      '"Write with AI" — describe, draft, send',
-      "Tone matching from your writing history",
-      "1-click smart reply suggestions",
-      "Thread TL;DR summaries for long conversations",
-    ],
+    title: "Daily Morning Brief",
+    desc: "Wake up to a 3-sentence summary of yesterday's most critical email threads. Focus on what requires immediate attention first.",
+    bg: "bg-indigo-50/50",
+    iconColor: "text-indigo-600",
   },
   {
-    icon: Sunrise,
-    color: "text-orange-600",
-    bg: "bg-orange-50",
-    title: '"Catch Me Up" Daily Brief',
-    desc: "Start every morning knowing exactly what needs your attention. An AI-generated digest of urgent messages, pending follow-ups, and today's calendar — delivered the moment you open your inbox.",
-    bullets: [
-      "Morning digest of what matters",
-      "Urgent messages & pending replies highlighted",
-      "Today's calendar at a glance",
-      "Powered by Google Gemini",
-    ],
+    icon: Calendar,
+    title: "Integrated Scheduling",
+    desc: "Insert calendar slots directly into your draft with a keyboard shortcut. Let recipients book syncs without navigating away from their inbox.",
+    bg: "bg-purple-50/50",
+    iconColor: "text-purple-600",
   },
   {
-    icon: Link2,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-    title: "Scheduling & Booking Links",
-    desc: "Share a personal booking page — like Calendly, but built right into your email client. Recipients pick a time from your real availability. The event and confirmation happen automatically.",
-    bullets: [
-      "Public /book/you page with real-time availability",
-      "Automatic event creation & invite emails",
-      "Natural language: \"lunch with Sam Friday 1pm\"",
-      "Time-zone intelligence built in",
-    ],
+    icon: Layers,
+    title: "Unified Accounts",
+    desc: "Connect multiple Google, Workspace, or custom accounts. Read, search, and manage a unified priority view in one clean interface.",
+    bg: "bg-indigo-50/50",
+    iconColor: "text-indigo-600",
   },
   {
-    icon: Command,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    title: "Command Palette & Shortcuts",
-    desc: "Hit Cmd+K and do anything — search, compose, navigate, change settings. Every action in the app has a keyboard shortcut. Power users will feel right at home.",
-    bullets: [
-      "Cmd+K opens a universal command bar",
-      "J/K to move, E to archive, C to compose, R to reply",
-      "Shortcut coaching for new users",
-      "Interactive tutorial on first launch",
-    ],
-  },
-  {
-    icon: FileText,
-    color: "text-pink-600",
-    bg: "bg-pink-50",
-    title: "Templates & Snippets",
-    desc: "Stop rewriting the same email. Create templates with dynamic variables ({{name}}, {{company}}) and expand them with a keyboard shortcut. Share them across your team.",
-    bullets: [
-      "Variable expansion ({{name}}, {{date}}, ...)",
-      "Keyboard-triggered insertion",
-      "Shared template library for teams",
-      "Works in compose & smart reply",
-    ],
-  },
-  {
-    icon: Timer,
-    color: "text-cyan-600",
-    bg: "bg-cyan-50",
-    title: "Snooze, Send Later & Follow-Ups",
-    desc: "Control when email happens. Snooze a message to resurface later. Schedule a send for the perfect time. Get reminded if someone doesn't reply in 3 days.",
-    bullets: [
-      "Snooze to any date/time",
-      "Schedule send for later",
-      "Follow-up nudges on no-reply",
-      "All powered by background job queues",
-    ],
+    icon: ShieldCheck,
+    title: "DPDP & GST Compliant",
+    desc: "100% of data is stored in secure Indian datacenters. Full GST-invoicing support and secure OAuth-only calendar & email permissions.",
+    bg: "bg-purple-50/50",
+    iconColor: "text-purple-600",
   },
 ];
 
-const PRICING = [
+const MOCK_EMAILS = [
   {
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    desc: "Get started with the essentials",
-    cta: "Start Free",
-    features: [
-      "1 Gmail account",
-      "Split inbox & smart views",
-      "Calendar views",
-      "Cmd+K command palette",
-      "Full keyboard shortcuts",
-      "Snooze & VIP contacts",
-      "Limited AI priority",
-    ],
-    highlight: false,
+    id: 1,
+    sender: "Priya Desai",
+    subject: "Diwali Campaign Collaboration",
+    time: "10:42 AM",
+    unread: true,
+    body: "Hey team, just wanted to check if you're open to collaborating on our upcoming Diwali campaign? We need to lock in the pricing structure this week.",
+    prompt: "Say we're interested, ask for pricing sheet, and suggest meeting next Monday 3 PM.",
+    steps: [
+      "Drafting with Gusion AI...",
+      "Hi Priya,\n\nThanks for reaching out! We are definitely interested in collaborating on the Diwali Campaign.\n\nCould you please send over your pricing sheet?\n\nAlso, let's schedule a brief sync next Monday at 3 PM to discuss details.\n\nBest,\nJatin",
+      "Email sent successfully! ✓"
+    ]
   },
   {
-    name: "Pro",
-    price: "$20",
-    period: "/month",
-    desc: "Everything for power users",
-    cta: "Start 14-Day Free Trial",
-    features: [
-      "Everything in Free",
-      "AI Agent Chat",
-      "AI Compose & Smart Reply",
-      "Thread Summaries",
-      "Daily Brief",
-      "Scheduling links",
-      "Send Later & Follow-ups",
-      "Templates & snippets",
-      "Multi-account support",
-      "Bulk mail-merge",
-    ],
-    highlight: true,
-  },
-  {
-    name: "Team",
-    price: "$25",
-    period: "/seat/month",
-    desc: "Shared inbox & support tickets",
-    cta: "Contact Us",
-    features: [
-      "Everything in Pro",
-      "Shared inbox (support@)",
-      "Support ticket IDs (GSN-####)",
-      "Assignment & internal notes",
-      "Automation engine",
-      "Shared template library",
-      "Team analytics",
-      "Admin roles & controls",
-    ],
-    highlight: false,
-  },
+    id: 2,
+    sender: "Rohan Mehta",
+    subject: "Feedback on API Integration v2",
+    time: "9:15 AM",
+    unread: false,
+    body: "Hi Gusion team, we're seeing some unexpected rate limiting errors on the v2 webhook integrations. Can you check if the threshold is configured correctly?",
+    prompt: "Tell him we fixed the rate limiting bug and ask him to re-test the webhook payload.",
+    steps: [
+      "Generating AI Reply...",
+      "Hi Rohan,\n\nJust wanted to let you know that we've resolved the rate-limiting bug you experienced in v2.\n\nCould you please re-test your webhook payload and let us know if everything works on your end?\n\nBest,\nJatin",
+      "Email sent successfully! ✓"
+    ]
+  }
+];
+
+const COMPANYS = [
+  "Google Workspace", "Gmail API", "Stripe India", "Razorpay", "Next.js", "Drizzle ORM"
 ];
 
 const FAQS = [
   {
-    q: "What email providers do you support?",
-    a: "Gusion Mail currently supports Gmail (Google Workspace and personal). We connect securely through Google's official OAuth — your password is never stored. Outlook and IMAP support are on the roadmap.",
+    q: "Is Gusion Mail secure? Can you read my emails?",
+    a: "No. Gusion Mail authenticates directly with Google OAuth. Your emails are parsed and indexed locally on your device. We do not store or read your message payloads on our servers, ensuring your business intelligence remains entirely private."
   },
   {
-    q: "Is my data secure?",
-    a: "Absolutely. Every user gets an isolated tenant with encrypted OAuth tokens. We use scoped Google API permissions (minimum required), and all email HTML is sanitized before rendering. You can export your data or delete your account at any time.",
+    q: "Do you support custom domain emails or multiple accounts?",
+    a: "Yes. You can link multiple Gmail and Google Workspace domains (e.g., your personal account and multiple company accounts) and view all prioritized messages in a single unified inbox."
   },
   {
-    q: "How does the 14-day trial work?",
-    a: "Sign up and get full Pro access for 14 days — AI Agent, scheduling links, smart replies, everything. No card required to start. At the end of the trial you can continue on the Free plan or upgrade.",
+    q: "How does the AI Morning Brief work?",
+    a: "Every morning, our local worker engine safely fetches the unread threads from the past 24 hours, runs them through our secure LLM integration, and outputs a 3-sentence summary highlighting actions, urgency levels, and meeting requests."
   },
   {
-    q: "What AI model powers Gusion?",
-    a: "We use Google's Gemini models. Lightweight classification models for priority inbox (fast and cheap), and the latest Gemini for AI compose, smart replies, and the Agent Chat.",
-  },
-  {
-    q: "Can I really use only my keyboard?",
-    a: "Yes! Every action has a keyboard shortcut — J/K to navigate, E to archive, C to compose, R to reply, Cmd+K for the command palette. We even have an interactive tutorial to get you up to speed in minutes.",
-  },
-  {
-    q: "How is this different from Superhuman?",
-    a: "Same keyboard-first speed philosophy, but with a built-in AI agent that can execute multi-step workflows, integrated scheduling links (no Calendly needed), and pricing that won't break the bank. Plus, team features with shared inboxes and support tickets.",
-  },
+    q: "Do you offer GST compliant invoices for Indian SMBs?",
+    a: "Absolutely. All transactions support Razorpay and Stripe with complete Indian GST invoices, permitting you to claim tax credits seamlessly."
+  }
 ];
 
-/* ─── component ─── */
-export function NewLanding() {
-  const [scrolled, setScrolled] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [mobileMenu, setMobileMenu] = useState(false);
+/* ─── ANIMATED EMAIL SIMULATOR ─── */
+function InboxSimulator() {
+  const [selectedMailIndex, setSelectedMailIndex] = useState(0);
+  const [typedPrompt, setTypedPrompt] = useState("");
+  const [typedEmailText, setTypedEmailText] = useState("");
+  const [isTypingPrompt, setIsTypingPrompt] = useState(false);
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
+  const [isSent, setIsSent] = useState(false);
+
+  const activeMail = MOCK_EMAILS[selectedMailIndex] ?? MOCK_EMAILS[0]!;
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    let isCancelled = false;
 
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-    setMobileMenu(false);
-  };
+    // Reset simulation states when mail changes
+    setTypedPrompt("");
+    setTypedEmailText("");
+    setIsSent(false);
+    setIsTypingPrompt(true);
+    setIsGeneratingEmail(false);
+
+    // Step 1: Type the prompt
+    let promptIndex = 0;
+    const promptInterval = setInterval(() => {
+      if (isCancelled) return;
+      if (promptIndex < activeMail.prompt.length) {
+        setTypedPrompt(activeMail.prompt.slice(0, promptIndex + 1));
+        promptIndex++;
+      } else {
+        clearInterval(promptInterval);
+        setIsTypingPrompt(false);
+        setIsGeneratingEmail(true);
+
+        // Step 2: Show generating loader, then write the email
+        setTimeout(() => {
+          if (isCancelled) return;
+          setIsGeneratingEmail(false);
+          let emailIndex = 0;
+          const emailTargetText = activeMail.steps[1] ?? "";
+          const emailInterval = setInterval(() => {
+            if (isCancelled) return;
+            if (emailIndex < emailTargetText.length) {
+              setTypedEmailText(emailTargetText.slice(0, emailIndex + 5));
+              emailIndex += 5; // Type faster
+            } else {
+              clearInterval(emailInterval);
+              // Step 3: Trigger send success
+              setTimeout(() => {
+                if (isCancelled) return;
+                setIsSent(true);
+                // Step 4: Advance to next mail after delay
+                setTimeout(() => {
+                  if (isCancelled) return;
+                  setSelectedMailIndex((prev) => (prev + 1) % MOCK_EMAILS.length);
+                }, 3000);
+              }, 1000);
+            }
+          }, 20);
+        }, 1500);
+      }
+    }, 30);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(promptInterval);
+    };
+  }, [selectedMailIndex, activeMail]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] text-zinc-900 selection:bg-indigo-200 selection:text-indigo-900 overflow-x-hidden">
-      {/* ─── NAV ─── */}
-      <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? "bg-white/80 backdrop-blur-xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] border-b border-zinc-200/60"
-            : "bg-transparent"
-        }`}
-      >
-        <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          {/* logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-indigo-500/20">
-              G
+    <div className="relative w-full max-w-[620px] p-6 sm:p-10 font-sans">
+      
+      {/* Mockup Window Wrapper (with overflow-hidden) */}
+      <div className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        
+        {/* OS Bar */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-850 bg-zinc-950 text-zinc-400 text-xs">
+          <div className="flex items-center gap-1.5 font-mono">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500/80 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+            <span className="ml-1.5 text-[10px] text-zinc-500 select-none">gusion-mail-workspace</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">Connected</span>
+            <span className="text-[10px] text-zinc-500 select-none">9:41 AM</span>
+          </div>
+        </div>
+
+        {/* Mail grid */}
+        <div className="grid grid-cols-[140px_1fr] h-[370px] bg-zinc-950">
+          {/* Left Inbox List */}
+          <div className="border-r border-zinc-850 flex flex-col h-full bg-zinc-950/80">
+            <div className="p-3 border-b border-zinc-850/60 flex items-center">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Priority Inbox</span>
             </div>
-            <span className="font-bold text-lg tracking-tight text-zinc-900">
-              Gusion Mail
-            </span>
+            <div className="flex-1 overflow-y-auto no-scrollbar">
+              {MOCK_EMAILS.map((mail, idx) => {
+                const isSelected = idx === selectedMailIndex;
+                return (
+                  <div
+                    key={mail.id}
+                    onClick={() => setSelectedMailIndex(idx)}
+                    className={`p-3 border-b border-zinc-850/40 cursor-pointer transition ${
+                      isSelected ? "bg-indigo-950/20 border-l-2 border-l-indigo-500" : "hover:bg-zinc-900/40"
+                    }`}
+                  >
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <span className={`text-[10px] font-semibold truncate max-w-[80px] ${isSelected ? "text-indigo-400" : "text-zinc-350"}`}>
+                        {mail.sender}
+                      </span>
+                      <span className="text-[8px] text-zinc-500">{mail.time}</span>
+                    </div>
+                    <div className="text-[9px] text-zinc-400 truncate font-medium">{mail.subject}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* desktop links */}
-          <div className="hidden md:flex items-center gap-8">
-            {NAV_LINKS.map((l) => (
-              <button
-                key={l.href}
-                onClick={() => scrollTo(l.href.slice(1))}
-                className="text-sm font-medium text-zinc-500 hover:text-zinc-900 transition cursor-pointer"
-              >
-                {l.label}
-              </button>
-            ))}
+          {/* Right Detail Pane */}
+          <div className="flex flex-col h-full bg-zinc-900 overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-850 flex justify-between items-start">
+              <div>
+                <h4 className="text-[11px] font-bold text-zinc-200">{activeMail.subject}</h4>
+                <p className="text-[9px] text-zinc-400 mt-0.5">
+                  From: <span className="text-zinc-300 font-semibold">{activeMail.sender}</span>
+                </p>
+              </div>
+              <div className="text-[9px] text-zinc-500 font-mono">10:42 AM (2m ago)</div>
+            </div>
+
+            {/* Email Body */}
+            <div className="p-4 flex-1 text-[11px] text-zinc-350 leading-relaxed font-normal bg-zinc-900 overflow-y-auto">
+              <div className="border-l-2 border-indigo-500/30 pl-3 italic text-zinc-400 text-[10.5px] mb-3.5 leading-normal">
+                &quot;{activeMail.body}&quot;
+              </div>
+
+              {/* Simulated Prompt Command Box */}
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-2.5 mb-3">
+                <div className="flex items-center gap-1.5 mb-1 text-[8px] font-bold text-indigo-400 uppercase tracking-wide">
+                  <Bot size={10} />
+                  <span>DESCRIBE REPLY (AI AGENT COMMAND)</span>
+                </div>
+                <div className="font-mono text-[9.5px] text-zinc-200 min-h-[14px] flex items-center leading-normal">
+                  <span>{typedPrompt}</span>
+                  {isTypingPrompt && <span className="w-1 h-3.5 bg-indigo-500 animate-pulse ml-0.5" />}
+                </div>
+              </div>
+
+              {/* Simulated AI Output Area */}
+              {typedEmailText && (
+                <div className="relative bg-zinc-950/40 border border-zinc-800/80 rounded-lg p-2.5 font-mono text-[9px] text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  <div className="absolute top-2 right-2 text-[7px] bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded uppercase font-semibold">
+                    Gusion AI Draft
+                  </div>
+                  {typedEmailText}
+                  {!isSent && !isTypingPrompt && <span className="inline-block w-1.5 h-3 bg-indigo-500 animate-pulse ml-0.5" />}
+                </div>
+              )}
+
+              {isGeneratingEmail && (
+                <div className="flex items-center gap-2 text-[9px] text-indigo-400 font-mono animate-pulse">
+                  <Sparkles size={10} className="animate-spin" />
+                  <span>Gusion AI drafting response...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <div className="px-4 py-3 border-t border-zinc-850 bg-zinc-950 flex items-center justify-between">
+              <span className="text-[9px] text-zinc-500 font-mono select-none">Press Cmd+Enter to send</span>
+              <div className="flex items-center gap-2">
+                <AnimatePresence mode="wait">
+                  {isSent ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg text-[9px] font-bold"
+                    >
+                      <CheckCircle size={11} />
+                      <span>Sent Successfully</span>
+                    </motion.div>
+                  ) : (
+                    <button
+                      disabled={isTypingPrompt || isGeneratingEmail}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <Send size={10} />
+                      <span>Send Reply</span>
+                    </button>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Floating Metric Widgets (placed OUTSIDE the overflow-hidden container) */}
+      <div className="absolute top-12 -left-6 w-[170px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob1 z-20 hover:scale-105 transition-transform">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Zap size={11} className="text-indigo-400" />
+          <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Response Speed</span>
+        </div>
+        <div className="font-mono text-lg font-bold text-zinc-150 leading-none">1.2s avg</div>
+        <div className="text-[9px] text-zinc-400 mt-1">AI draft generation speed</div>
+      </div>
+
+      <div className="absolute -bottom-2 -right-2 w-[190px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob2 z-20 hover:scale-105 transition-transform">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-indigo-500/10 border border-indigo-500/20 rounded-lg grid place-items-center text-indigo-400 shrink-0">
+            🤖
+          </div>
+          <div>
+            <div className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest leading-none">AI Agent Reply</div>
+            <div className="text-[9px] text-zinc-300 font-semibold mt-1 truncate">draft generated in 0.3s</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute -bottom-4 -left-4 w-[160px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob3 z-20 hover:scale-105 transition-transform hidden sm:block">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Keyboard size={11} className="text-indigo-400" />
+          <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Shortcuts</span>
+        </div>
+        <div className="font-mono text-[10px] font-bold text-zinc-150 leading-none">J / K Navigation</div>
+        <div className="text-[9px] text-zinc-400 mt-1">Navigate without mouse</div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ─── MAIN NEW LANDING PAGE ─── */
+export function NewLanding() {
+  const [activeFAQ, setActiveFAQ] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-white text-zinc-800 font-sans antialiased overflow-x-hidden">
+      
+      {/* ─── NAVBAR ─── */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 transition-colors">
+        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center no-underline text-wapi-ink shrink-0 relative">
+              <Image src="/logo2.svg" alt="Gusion Mail Logo" width="150" height="34" priority />
+              <span className="text-red-600 -top-4.5 relative text-base font-medium -ml-1">Mail</span>
+            </Link>
+
+            <nav className="hidden md:flex items-center gap-6">
+              {NAV_ITEMS.map((it) => (
+                <Link
+                  key={it.label}
+                  href={it.href}
+                  className="text-[13px] font-semibold text-zinc-500 hover:text-indigo-600 transition no-underline"
+                >
+                  {it.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          {/* cta */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => signIn("google")}
-              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition cursor-pointer"
+              className="hidden sm:inline-flex items-center text-[13px] font-semibold text-zinc-600 hover:text-indigo-600 transition cursor-pointer"
             >
-              Sign In
+              Log In
             </button>
             <button
               onClick={() => signIn("google")}
-              className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-violet-600 rounded-lg shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 transition-all cursor-pointer"
+              className="px-4 py-2 rounded-full bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/20 hover:shadow-indigo-700/30 flex items-center gap-1 cursor-pointer"
             >
-              Get Started Free
+              <span>Get Started</span>
+              <ArrowRight size={13} />
             </button>
 
-            {/* mobile hamburger */}
+            {/* Mobile menu toggle */}
             <button
-              onClick={() => setMobileMenu(!mobileMenu)}
-              className="md:hidden ml-1 p-2 text-zinc-600 hover:text-zinc-900 cursor-pointer"
-              aria-label="Menu"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden flex flex-col gap-1 p-2 rounded-lg hover:bg-zinc-50 transition cursor-pointer"
+              aria-label="Toggle Menu"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                {mobileMenu ? (
-                  <path d="M5 5l10 10M15 5L5 15" />
-                ) : (
-                  <path d="M3 6h14M3 10h14M3 14h14" />
-                )}
-              </svg>
+              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-transform ${mobileMenuOpen ? "rotate-45 translate-y-1.5" : ""}`} />
+              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-opacity ${mobileMenuOpen ? "opacity-0" : ""}`} />
+              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-transform ${mobileMenuOpen ? "-rotate-45 -translate-y-1.5" : ""}`} />
             </button>
           </div>
-        </nav>
+        </div>
 
-        {/* mobile menu */}
+        {/* Mobile menu panel */}
         <AnimatePresence>
-          {mobileMenu && (
+          {mobileMenuOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-white/95 backdrop-blur-xl border-b border-zinc-200/60 overflow-hidden"
+              className="md:hidden bg-white border-t border-zinc-100 px-6 py-4 flex flex-col gap-3.5"
             >
-              <div className="px-6 py-4 flex flex-col gap-3">
-                {NAV_LINKS.map((l) => (
-                  <button
-                    key={l.href}
-                    onClick={() => scrollTo(l.href.slice(1))}
-                    className="text-sm font-medium text-zinc-600 hover:text-zinc-900 text-left cursor-pointer"
-                  >
-                    {l.label}
-                  </button>
-                ))}
-                <button
-                  onClick={() => signIn("google")}
-                  className="text-sm font-medium text-zinc-600 hover:text-zinc-900 text-left cursor-pointer"
+              {NAV_ITEMS.map((it) => (
+                <Link
+                  key={it.label}
+                  href={it.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm font-semibold text-zinc-600 hover:text-indigo-600 no-underline py-1.5 block border-b border-zinc-50 last:border-0"
                 >
-                  Sign In
+                  {it.label}
+                </Link>
+              ))}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => { setMobileMenuOpen(false); void signIn("google"); }}
+                  className="flex-1 text-center py-2.5 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                >
+                  Log In
+                </button>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); void signIn("google"); }}
+                  className="flex-1 text-center py-2.5 rounded-full bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md cursor-pointer"
+                >
+                  Get Started
                 </button>
               </div>
             </motion.div>
@@ -420,441 +472,629 @@ export function NewLanding() {
         </AnimatePresence>
       </header>
 
-      {/* ─── HERO ─── */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
-        {/* soft ambient blobs */}
-        <div className="absolute top-16 left-1/4 w-[480px] h-[480px] bg-indigo-100/60 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute -bottom-20 right-1/4 w-[560px] h-[560px] bg-violet-100/50 rounded-full blur-[120px] pointer-events-none" />
+      {/* ─── HERO SECTION ─── */}
+      <section className="relative px-6 pt-16 pb-20 overflow-hidden bg-white">
+        {/* Soft Background Gradients */}
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,#EAF4EE,transparent_45%),radial-gradient(circle_at_20%_80%,#FFF5F5,transparent_45%)] opacity-80" />
 
-        <div className="relative max-w-6xl mx-auto px-6 text-center">
-          {/* badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-xs font-semibold text-indigo-600 mb-8"
-          >
-            <Zap size={12} className="animate-pulse" />
-            <span>Now in Public Trial — 14 Days Free</span>
-          </motion.div>
-
-          {/* headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-zinc-900 max-w-4xl mx-auto leading-[1.1] mb-6"
-          >
-            The AI command center for{" "}
-            <span className="bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 bg-clip-text text-transparent">
-              email & calendar
-            </span>
-          </motion.h1>
-
-          {/* subtext */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="text-lg md:text-xl text-zinc-500 max-w-2xl mx-auto leading-relaxed mb-10"
-          >
-            Triage your inbox at the speed of thought. Let AI draft replies,
-            summarize threads, and run your scheduling — all from a keyboard-first
-            console powered by Google Gemini.
-          </motion.p>
-
-          {/* cta buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.35 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
-          >
-            <button
-              onClick={() => signIn("google")}
-              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl shadow-xl shadow-indigo-500/20 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2 text-base"
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-16 items-center relative z-10">
+          
+          {/* Left Copy */}
+          <div className="flex flex-col items-start text-left">
+            <Link
+              href="#bento"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-200 hover:border-zinc-300 rounded-full text-xs text-zinc-600 mb-6 transition no-underline"
             >
-              <span>Start Free — 14 Day Trial</span>
-              <ArrowRight size={18} />
-            </button>
-            <button
-              onClick={() => scrollTo("features")}
-              className="w-full sm:w-auto px-8 py-4 bg-white border border-zinc-200 text-zinc-700 font-semibold rounded-xl shadow-sm hover:shadow-md hover:border-zinc-300 transition-all hover:-translate-y-0.5 cursor-pointer text-base"
-            >
-              See Features
-            </button>
-          </motion.div>
+              <span className="bg-purple-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                New
+              </span>
+              <span>Morning Brief digest is now in beta →</span>
+            </Link>
 
-          {/* hero image */}
-          <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.9, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="relative max-w-5xl mx-auto"
-          >
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-zinc-900/10 border border-zinc-200/80">
-              <img
-                src="/hero-dashboard.png"
-                alt="Gusion Mail dashboard — three-pane inbox with AI priority badges, command palette, and calendar"
-                className="w-full h-auto"
-                loading="eager"
-              />
-              {/* soft overlay gradient at bottom */}
-              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#FAFAF9] to-transparent pointer-events-none" />
+            <h1 className="font-bold text-[clamp(40px,5.5vw,72px)] leading-[0.98] tracking-tight text-[#012b57] mb-6">
+              The AI-first email <br />
+              client for <span className="text-indigo-600 italic">high-growth</span> teams.
+            </h1>
+
+            <p className="text-base sm:text-lg text-zinc-500 leading-relaxed max-w-[540px] mb-8 font-normal">
+              Gusion Mail syncs with Gmail and Workspace to deliver speed. Draft complete replies in seconds, summarize long threads automatically, and manage contacts seamlessly in a beautiful, light interface.
+            </p>
+
+            <div className="flex flex-wrap gap-3 mb-8">
+              <button
+                onClick={() => signIn("google")}
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[14px] font-bold bg-[#012b57] text-white hover:bg-indigo-600 transition shadow-lg hover:shadow-indigo-600/35 hover:-translate-y-0.5 group cursor-pointer"
+              >
+                <span>Connect Gmail Free</span>
+                <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <Link
+                href="#pricing"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[14px] font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 hover:-translate-y-0.5 transition no-underline cursor-pointer"
+              >
+                View Pricing Plans
+              </Link>
             </div>
-          </motion.div>
-        </div>
-      </section>
 
-      {/* ─── TRUST BAR ─── */}
-      <section className="py-12 border-y border-zinc-100">
-        <div className="max-w-5xl mx-auto px-6">
-          <FadeIn className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-sm text-zinc-400 font-medium">
-            <span className="flex items-center gap-2">
-              <ShieldCheck size={16} className="text-emerald-500" />
-              Encrypted & Isolated Tenants
-            </span>
-            <span className="flex items-center gap-2">
-              <Cpu size={16} className="text-violet-500" />
-              Powered by Google Gemini
-            </span>
-            <span className="flex items-center gap-2">
-              <Star size={16} className="text-amber-500" />
-              Built for Founders, Execs & Power Users
-            </span>
-            <span className="flex items-center gap-2">
-              <Users size={16} className="text-blue-500" />
-              Team & Enterprise Ready
-            </span>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ─── THREE PILLARS ─── */}
-      <section id="features" className="py-24 md:py-32">
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-16">
-            <p className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3">
-              Why switch
-            </p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-zinc-900">
-              Everything you need. Nothing you don&apos;t.
-            </h2>
-          </FadeIn>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {PILLARS.map((p, i) => (
-              <FadeIn key={p.title} delay={i * 0.1}>
-                <div className="group relative p-8 rounded-2xl bg-white border border-zinc-100 shadow-sm hover:shadow-lg hover:border-zinc-200 transition-all hover:-translate-y-1 h-full">
-                  <div
-                    className={`w-12 h-12 rounded-xl ${p.bg} flex items-center justify-center ${p.iconColor} mb-5`}
-                  >
-                    <p.icon size={24} />
-                  </div>
-                  <h3 className="text-xl font-bold text-zinc-900 mb-3">
-                    {p.title}
-                  </h3>
-                  <p className="text-zinc-500 leading-relaxed text-[15px]">
-                    {p.desc}
-                  </p>
+            {/* Badges Strip */}
+            <div className="flex flex-wrap gap-3 items-stretch w-full pt-4 border-t border-zinc-150">
+              {/* Trust Badge 1 */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50/70 border border-zinc-200 rounded-xl animate-badge-glow transition-all hover:scale-[1.02] cursor-default">
+                <div className="w-6 h-6 rounded-lg bg-green-500/10 grid place-items-center text-green-600 shrink-0">
+                  <ShieldCheck size={13} />
                 </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FEATURE DEEP-DIVES ─── */}
-      <section className="py-24 md:py-32 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-20">
-            <p className="text-sm font-semibold text-violet-600 tracking-wide uppercase mb-3">
-              Features
-            </p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-zinc-900 mb-4">
-              Every feature, actually explained
-            </h2>
-            <p className="text-zinc-500 max-w-xl mx-auto">
-              Not just bullet points. Here&apos;s what each feature does, why it
-              matters, and how it works.
-            </p>
-          </FadeIn>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {FEATURES.map((f, i) => (
-              <FadeIn key={f.title} delay={(i % 2) * 0.1}>
-                <div className="group p-8 rounded-2xl bg-[#FAFAF9] border border-zinc-100 hover:border-zinc-200 hover:shadow-md transition-all h-full">
-                  <div className="flex items-start gap-4 mb-5">
-                    <div
-                      className={`w-11 h-11 rounded-xl ${f.bg} flex items-center justify-center ${f.color} shrink-0`}
-                    >
-                      <f.icon size={22} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-zinc-900 mb-1">
-                        {f.title}
-                      </h3>
-                    </div>
-                  </div>
-                  <p className="text-zinc-500 text-[15px] leading-relaxed mb-5">
-                    {f.desc}
-                  </p>
-                  <ul className="space-y-2.5">
-                    {f.bullets.map((b) => (
-                      <li
-                        key={b}
-                        className="flex items-start gap-2.5 text-sm text-zinc-600"
-                      >
-                        <Check
-                          size={16}
-                          className="text-emerald-500 mt-0.5 shrink-0"
-                        />
-                        <span>{b}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="leading-none text-left">
+                  <div className="text-[11px] font-bold text-zinc-800">Secure OAuth</div>
+                  <div className="text-[9px] text-zinc-400 mt-0.5">Google Verified App</div>
                 </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
+              </div>
 
-      {/* ─── AI SHOWCASE BANNER ─── */}
-      <section className="py-24 md:py-32 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-violet-50 to-purple-50 pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-200/30 rounded-full blur-[120px] pointer-events-none" />
-
-        <div className="relative max-w-4xl mx-auto px-6 text-center">
-          <FadeIn>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-indigo-100 shadow-sm text-sm font-semibold text-indigo-600 mb-8">
-              <Sparkles size={16} />
-              Powered by Google Gemini
+              {/* Trust Badge 2 */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50/70 border border-zinc-200 rounded-xl animate-badge-glow [animation-delay:1.5s] transition-all hover:scale-[1.02] cursor-default">
+                <div className="w-6 h-6 rounded-lg bg-indigo-500/10 grid place-items-center text-indigo-600 shrink-0">
+                  <Cpu size={13} />
+                </div>
+                <div className="leading-none text-left">
+                  <div className="text-[11px] font-bold text-zinc-800">Local Privacy</div>
+                  <div className="text-[9px] text-zinc-400 mt-0.5">Local cache indexing</div>
+                </div>
+              </div>
             </div>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-zinc-900 mb-6">
-              &ldquo;Invite the team Thursday 2pm and email everyone the
-              agenda.&rdquo;
-            </h2>
-            <p className="text-lg text-zinc-500 max-w-2xl mx-auto leading-relaxed mb-10">
-              The AI Agent understands multi-step requests across email and
-              calendar. It proposes each action, you confirm with one click, and
-              it&apos;s done. No switching apps, no copy-paste, no friction.
-            </p>
-            <button
-              onClick={() => signIn("google")}
-              className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold rounded-xl shadow-xl shadow-indigo-500/20 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-2"
-            >
-              Try the AI Agent
-              <ArrowRight size={18} />
-            </button>
-          </FadeIn>
+          </div>
+
+          {/* Right Inbox Mockup Simulator */}
+          <div className="flex items-center justify-center relative px-4 sm:px-8">
+            <InboxSimulator />
+          </div>
+
         </div>
       </section>
 
-      {/* ─── PRICING ─── */}
-      <section id="pricing" className="py-24 md:py-32 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <FadeIn className="text-center mb-16">
-            <p className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3">
-              Pricing
-            </p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-zinc-900 mb-4">
-              Simple, transparent pricing
-            </h2>
-            <p className="text-zinc-500">
-              Start free. Upgrade when you&apos;re ready.
-            </p>
-          </FadeIn>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {PRICING.map((plan, i) => (
-              <FadeIn key={plan.name} delay={i * 0.1}>
-                <div
-                  className={`relative p-8 rounded-2xl border h-full flex flex-col ${
-                    plan.highlight
-                      ? "bg-gradient-to-b from-indigo-50/50 to-white border-indigo-200 shadow-lg shadow-indigo-500/5 ring-1 ring-indigo-100"
-                      : "bg-white border-zinc-100 shadow-sm"
-                  }`}
+      {/* ─── TRUSTED LOGO MARQUEE ─── */}
+      <section className="bg-zinc-50 border-y border-zinc-150 py-10 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <p className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-[0.15em] mb-5">
+            BUILT WITH COMPATIBILITY IN MIND
+          </p>
+          <div className="relative w-full overflow-hidden">
+            {/* Masking shadows left/right */}
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-linear-to-r from-zinc-50 to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-linear-to-l from-zinc-50 to-transparent z-10 pointer-events-none" />
+            
+            <div className="flex gap-16 animate-marquee whitespace-nowrap">
+              {[...COMPANYS, ...COMPANYS].map((company, i) => (
+                <span
+                  key={i}
+                  className="font-bold text-lg sm:text-xl text-zinc-400 hover:text-indigo-600 transition cursor-default select-none"
                 >
-                  {plan.highlight && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-xs font-bold rounded-full">
-                      Most Popular
-                    </div>
-                  )}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-bold text-zinc-900 mb-1">
-                      {plan.name}
-                    </h3>
-                    <p className="text-zinc-500 text-sm mb-4">{plan.desc}</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-zinc-900">
-                        {plan.price}
-                      </span>
-                      <span className="text-zinc-400 text-sm font-medium">
-                        {plan.period}
-                      </span>
-                    </div>
-                  </div>
+                  {company}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
-                  <ul className="space-y-3 mb-8 flex-1">
-                    {plan.features.map((f) => (
-                      <li
-                        key={f}
-                        className="flex items-start gap-2.5 text-sm text-zinc-600"
-                      >
-                        <Check
-                          size={16}
-                          className={`mt-0.5 shrink-0 ${
-                            plan.highlight
-                              ? "text-indigo-500"
-                              : "text-emerald-500"
-                          }`}
-                        />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button
-                    onClick={() => signIn("google")}
-                    className={`w-full py-3 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
-                      plan.highlight
-                        ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5"
-                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
-                    }`}
-                  >
-                    {plan.cta}
-                  </button>
-                </div>
-              </FadeIn>
+      {/* ─── STATS STRIP ─── */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {STATS.map((stat, i) => (
+              <div key={i} className="text-center flex flex-col items-center">
+                <span className="text-3xl sm:text-4xl font-extrabold text-[#012b57] tracking-tight mb-1">
+                  {stat.value}
+                </span>
+                <span className="text-xs text-zinc-500 leading-normal max-w-[160px]">
+                  {stat.label}
+                </span>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── FAQ ─── */}
-      <section id="faq" className="py-24 md:py-32">
-        <div className="max-w-3xl mx-auto px-6">
-          <FadeIn className="text-center mb-16">
-            <p className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3">
-              FAQ
-            </p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-zinc-900">
-              Frequently asked questions
+      {/* ─── VALUE PILLARS (FEATURES GRID) ─── */}
+      <section id="features" className="py-20 bg-zinc-50/50 border-t border-zinc-100">
+        <div className="max-w-7xl mx-auto px-6">
+          
+          <div className="text-center mb-16 max-w-2xl mx-auto">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">
+              Core Features
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#012b57] tracking-tight mt-4 mb-5">
+              Powering your daily communication engine.
             </h2>
-          </FadeIn>
+            <p className="text-sm sm:text-base text-zinc-500 leading-relaxed font-normal">
+              Gusion Mail equips professionals with semantic AI workflows, zero-latency caching, and full calendar mapping.
+            </p>
+          </div>
 
-          <div className="space-y-3">
-            {FAQS.map((faq, i) => (
-              <FadeIn key={i} delay={i * 0.05}>
-                <div className="rounded-2xl border border-zinc-100 bg-white overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {PILLARS.map((p, i) => {
+              const Icon = p.icon;
+              return (
+                <div
+                  key={i}
+                  className="bg-white border border-zinc-150 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-zinc-200/50 hover:-translate-y-0.5 group flex flex-col"
+                >
+                  <div className={`w-10 h-10 rounded-xl ${p.bg} flex items-center justify-center shrink-0 mb-4`}>
+                    <Icon size={18} className={p.iconColor} />
+                  </div>
+                  <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">{p.title}</h3>
+                  <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed flex-1 font-normal">{p.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─── BENTO GRID SECTION ─── */}
+      <section id="bento" className="py-20 bg-white border-t border-zinc-100">
+        <div className="max-w-7xl mx-auto px-6">
+          
+          <div className="text-center mb-14 max-w-2xl mx-auto">
+            <span className="text-xs font-bold text-purple-600 uppercase tracking-widest bg-purple-50 px-3 py-1 rounded-full">
+              Product Tour
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#012b57] tracking-tight mt-4 mb-4">
+              Engineered for absolute focus.
+            </h2>
+            <p className="text-sm text-zinc-500 leading-normal font-normal">
+              Explore key details that set Gusion Mail apart from traditional web clients.
+            </p>
+          </div>
+
+          {/* Grid Template Areas styled via CSS grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[200px]">
+            
+            {/* Tile 1 — Command Palette */}
+            <div className="md:col-span-2 bg-[#012b57] text-white rounded-2xl p-6 flex flex-col justify-between overflow-hidden relative shadow-lg">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+              <div>
+                <span className="text-[9px] font-bold tracking-wider uppercase text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                  Keyboard First
+                </span>
+                <h3 className="text-base sm:text-lg font-bold mt-3">The Cmd+K Command Palette</h3>
+                <p className="text-xs text-zinc-300 max-w-sm mt-1 font-normal">
+                  Control all settings, accounts, rules, and AI parameters instantly. Press J/K keys to scroll through threads.
+                </p>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 flex items-center gap-2 font-mono text-[9px] text-zinc-300 max-w-[280px]">
+                <Command size={11} className="text-indigo-400" />
+                <span>type <b className="text-white">&quot;brief&quot;</b> to compile summaries</span>
+              </div>
+            </div>
+
+            {/* Tile 2 — Split Inbox */}
+            <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-6 flex flex-col justify-between shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                <Layers size={14} />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-zinc-850">Dynamic Split Inbox</h3>
+                <p className="text-xs text-zinc-500 mt-1 font-normal">
+                  Sort transactions, marketing notifications, and personal correspondence automatically.
+                </p>
+              </div>
+            </div>
+
+            {/* Tile 3 — hosted in Mumbai */}
+            <div className="bg-purple-50/40 border border-purple-200/80 rounded-2xl p-6 flex flex-col justify-between shadow-sm">
+              <div className="text-2xl select-none">🇮🇳</div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-zinc-850">100% Data Residency</h3>
+                <p className="text-xs text-zinc-500 mt-1 font-normal">
+                  Local cache architecture ensures your database remains hosted securely within India, compliant with DPDP guidelines.
+                </p>
+              </div>
+            </div>
+
+            {/* Tile 4 — Developer API */}
+            <div className="md:col-span-2 bg-zinc-950 border border-zinc-850 rounded-2xl p-6 flex flex-col justify-between font-mono overflow-hidden relative shadow-lg text-left">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-850/60">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <Code size={11} className="text-purple-400" />
+                  <span>Developer Sync API</span>
+                </div>
+                <div className="flex items-center gap-1 text-[9px] text-zinc-500">
+                  <span>POST /v1/drafts</span>
+                </div>
+              </div>
+              <pre className="text-[10px] text-zinc-300 leading-normal flex-1 pt-3">
+                <code>
+                  <span className="text-purple-400">await</span> gusion.inbox.createDraft{"({"}<br />
+                  {"  "}to: <span className="text-yellow-500">&quot;priya@desai.com&quot;</span>,<br />
+                  {"  "}prompt: <span className="text-yellow-500">&quot;Accept sync, limit to 15m&quot;</span><br />
+                  {"})"}{";"}
+                </code>
+              </pre>
+              <div className="text-[9px] text-zinc-500 mt-2">Fully documented OpenAPI endpoint triggers.</div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─── HOW IT WORKS ─── */}
+      <section id="how-it-works" className="py-20 bg-zinc-50/50 border-t border-zinc-100">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          
+          <div className="max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">
+              Process Flow
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#012b57] tracking-tight mt-4 mb-4">
+              Get set up in less than 2 minutes.
+            </h2>
+            <p className="text-sm text-zinc-500 font-normal">
+              No complex onboarding flow. Authenticate securely and start optimizing your workflow immediately.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            
+            {/* Step 1 */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-white border border-zinc-200 flex items-center justify-center font-bold text-zinc-700 shadow-md mb-4">
+                1
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Google Secure Sign-In</h3>
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+                Authenticate securely using Gmail OAuth scopes. We never store credentials locally.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-white border border-zinc-200 flex items-center justify-center font-bold text-zinc-700 shadow-md mb-4">
+                2
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Configure Workspace Rules</h3>
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+                Set up priority categories and define AI tone settings (formal, casual, concise).
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-white border border-zinc-200 flex items-center justify-center font-bold text-zinc-700 shadow-md mb-4">
+                3
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Navigate 10x Faster</h3>
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+                Manage correspondence instantly using command palettes and contextual drafts.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─── COMPARISON CARD ─── */}
+      <section className="py-20 bg-white border-t border-zinc-100">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-center mb-8">
+              Why switch to Gusion Mail?
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Left Column: Traditional */}
+              <div className="border-b md:border-b-0 md:border-r border-zinc-800 pb-8 md:pb-0 md:pr-8">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">
+                  Traditional Email Clients
+                </span>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {[
+                    "Mouse-dependent interface slows down processing",
+                    "Requires copy-pasting drafts to third-party tools",
+                    "Cluttered search query interface",
+                    "Siloed browser tabs for calendar scheduling"
+                  ].map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs text-zinc-400 font-normal">
+                      <span className="text-red-500 font-bold shrink-0">✕</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Right Column: Gusion */}
+              <div className="pt-4 md:pt-0">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">
+                  Gusion Mail Workspace
+                </span>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {[
+                    "Keyboard-driven shortcuts keep hands on home row",
+                    "AI agent drafts contextually inside the workspace",
+                    "Zero-latency indexing for instant search result loads",
+                    "Insert calendar slot proposals inside the draft directly"
+                  ].map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs text-zinc-200 font-normal">
+                      <span className="text-green-400 font-bold shrink-0">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ─── PRICING PLANS ─── */}
+      <section id="pricing" className="py-20 bg-zinc-50/50 border-t border-zinc-100">
+        <div className="max-w-7xl mx-auto px-6">
+          
+          <div className="text-center mb-16 max-w-2xl mx-auto">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">
+              Pricing Details
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#012b57] tracking-tight mt-4 mb-4">
+              Predictable, value-driven plans.
+            </h2>
+            <p className="text-sm text-zinc-500 font-normal">
+              Select a tier that scales with your growth. All billing includes secure payment pathways.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch">
+            
+            {/* Plan 1 */}
+            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm flex flex-col">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-zinc-800 uppercase tracking-wider">Free Tier</h3>
+                <div className="mt-2 flex items-baseline">
+                  <span className="text-3xl font-extrabold text-zinc-900">₹0</span>
+                  <span className="text-xs text-zinc-500 ml-1">/ seat / month</span>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-400 mb-6 font-normal">Basic inbox layout with Gmail account sync.</p>
+              <ul className="flex-1 flex flex-col gap-2.5 mb-6 text-xs text-zinc-500 font-normal">
+                {["1 Linked Account", "Standard AI Smart Reply (50/mo)", "Keyboard Shortcuts enabled", "Basic Search indexing"].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2">
+                    <CheckCircle2 size={13} className="text-indigo-600 shrink-0" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => signIn("google")}
+                className="w-full py-2.5 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 transition cursor-pointer"
+              >
+                Start Free
+              </button>
+            </div>
+
+            {/* Plan 2 — Pro (Featured) */}
+            <div className="bg-white border-2 border-indigo-600 rounded-2xl p-6 shadow-xl relative flex flex-col">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                Recommended
+              </div>
+              <div className="mb-4 mt-2">
+                <h3 className="text-sm font-bold text-[#012b57] uppercase tracking-wider">Pro License</h3>
+                <div className="mt-2 flex items-baseline">
+                  <span className="text-3xl font-extrabold text-zinc-900">₹1,699</span>
+                  <span className="text-xs text-zinc-500 ml-1">/ seat / month</span>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-400 mb-6 font-normal">Advanced semantic agent draft features for power users.</p>
+              <ul className="flex-1 flex flex-col gap-2.5 mb-6 text-xs text-zinc-500 font-normal">
+                {[
+                  "Unlimited Google Accounts",
+                  "Unlimited AI Smart Reply drafts",
+                  "Daily morning summary brief digests",
+                  "Google Calendar scheduling blocks",
+                  "Priority support SLA (12 hours)",
+                  "GST Compliant billing"
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2">
+                    <CheckCircle2 size={13} className="text-indigo-600 shrink-0" />
+                    <span className="text-zinc-800">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => signIn("google")}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+              >
+                Go Pro License
+              </button>
+            </div>
+
+            {/* Plan 3 */}
+            <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm flex flex-col">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-zinc-800 uppercase tracking-wider">Team Server</h3>
+                <div className="mt-2 flex items-baseline">
+                  <span className="text-3xl font-extrabold text-zinc-900">₹2,199</span>
+                  <span className="text-xs text-zinc-500 ml-1">/ seat / month</span>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-400 mb-6 font-normal">Collaborative priority feeds built for support desks.</p>
+              <ul className="flex-1 flex flex-col gap-2.5 mb-6 text-xs text-zinc-500 font-normal">
+                {[
+                  "Everything in Pro Tier",
+                  "Shared inbox delegation",
+                  "Shared draft approvals workspace",
+                  "Central team settings / workspace rules",
+                  "SSO / SAML authentications",
+                  "Dedicated manager support"
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2">
+                    <CheckCircle2 size={13} className="text-indigo-600 shrink-0" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => signIn("google")}
+                className="w-full py-2.5 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 transition cursor-pointer"
+              >
+                Configure Team
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─── FAQ SECTION ─── */}
+      <section id="faq" className="py-20 bg-white border-t border-zinc-100">
+        <div className="max-w-3xl mx-auto px-6">
+          
+          <div className="text-center mb-12">
+            <span className="text-xs font-bold text-purple-600 uppercase tracking-widest bg-purple-50 px-3 py-1 rounded-full">
+              Questions
+            </span>
+            <h2 className="text-3xl font-bold text-[#012b57] tracking-tight mt-4">
+              Frequently Asked Questions
+            </h2>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {FAQS.map((faq, idx) => {
+              const isOpen = activeFAQ === idx;
+              return (
+                <div
+                  key={idx}
+                  className="border border-zinc-150 rounded-2xl overflow-hidden transition-colors bg-white hover:border-zinc-250"
+                >
                   <button
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="w-full px-6 py-5 flex items-center justify-between text-left cursor-pointer group"
+                    onClick={() => setActiveFAQ(isOpen ? null : idx)}
+                    className="w-full px-6 py-4 flex items-center justify-between font-bold text-[#012b57] text-left text-sm cursor-pointer select-none bg-zinc-50/30"
                   >
-                    <span className="font-semibold text-zinc-900 text-[15px] pr-4">
-                      {faq.q}
-                    </span>
+                    <span>{faq.q}</span>
                     <ChevronDown
-                      size={18}
-                      className={`text-zinc-400 transition-transform shrink-0 ${
-                        openFaq === i ? "rotate-180" : ""
-                      }`}
+                      size={16}
+                      className={`text-zinc-400 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
                     />
                   </button>
-                  <AnimatePresence>
-                    {openFaq === i && (
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: "easeInOut" }}
-                        className="overflow-hidden"
+                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                       >
-                        <div className="px-6 pb-5 text-zinc-500 text-[15px] leading-relaxed border-t border-zinc-50 pt-4">
+                        <div className="px-6 pb-5 pt-1 text-xs sm:text-sm leading-relaxed text-zinc-500 font-normal">
                           {faq.a}
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
-              </FadeIn>
-            ))}
+              );
+            })}
           </div>
+
         </div>
       </section>
 
       {/* ─── FINAL CTA ─── */}
-      <section className="py-24 md:py-32 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/80 via-violet-50/60 to-[#FAFAF9] pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 w-[500px] h-[500px] bg-indigo-100/40 rounded-full blur-[100px] pointer-events-none" />
-
-        <div className="relative max-w-3xl mx-auto px-6 text-center">
-          <FadeIn>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-zinc-900 mb-6">
-              Ready to take control of your inbox?
-            </h2>
-            <p className="text-lg text-zinc-500 max-w-xl mx-auto leading-relaxed mb-10">
-              Join the public trial. Connect your Gmail, meet the AI, and
-              experience email the way it should be.
-            </p>
-            <button
-              onClick={() => signIn("google")}
-              className="px-10 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold rounded-xl shadow-xl shadow-indigo-500/20 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-2 text-lg"
-            >
-              Get Started Free
-              <ArrowRight size={20} />
-            </button>
-            <p className="mt-4 text-sm text-zinc-400">
-              14-day Pro trial · No credit card required
-            </p>
-          </FadeIn>
+      <section className="py-20 bg-indigo-950 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,#0056d6_0%,transparent_50%),radial-gradient(circle_at_80%_80%,#e61f2a_0%,transparent_50%)] opacity-30" />
+        
+        <div className="max-w-3xl mx-auto px-6 text-center relative z-10">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-[#ffffff]">
+            Reclaim your inbox speed today.
+          </h2>
+          <p className="text-sm text-zinc-300 leading-normal max-w-lg mx-auto mb-8 font-normal">
+            Link your Gmail or Workspace domain in 1 click. Start checking, prioritizing, drafting, and scheduling contextually.
+          </p>
+          <button
+            onClick={() => signIn("google")}
+            className="px-7 py-4 rounded-full bg-white text-[#012b57] hover:bg-zinc-100 text-sm font-bold transition shadow-2xl hover:scale-[1.01] cursor-pointer"
+          >
+            Connect My Gmail Now
+          </button>
+          <div className="flex justify-center gap-5 text-[11px] text-zinc-400 mt-6 font-normal">
+            <span>✓ Secure Google OAuth</span>
+            <span>✓ No credit card required</span>
+            <span>✓ Standard 14-day Pro trial</span>
+          </div>
         </div>
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="border-t border-zinc-100 bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* logo */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-md bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white text-xs shadow-sm">
-                G
-              </div>
-              <span className="font-bold text-sm text-zinc-900">
-                Gusion Mail
-              </span>
-            </div>
-
-            {/* links */}
-            <div className="flex items-center gap-6 text-sm text-zinc-400">
-              <a
-                href="/privacy"
-                className="hover:text-zinc-600 transition"
-              >
-                Privacy
-              </a>
-              <a
-                href="/terms"
-                className="hover:text-zinc-600 transition"
-              >
-                Terms
-              </a>
-              <a
-                href="/docs"
-                className="hover:text-zinc-600 transition"
-              >
-                API Docs
-              </a>
-            </div>
-
-            {/* copyright */}
-            <p className="text-xs text-zinc-400">
-              © {new Date().getFullYear()} Gusion Mail. All rights reserved.
+      <footer className="border-t-[3px] border-[#fff2e0] py-4 relative overflow-hidden bg-[#fff2e0]">
+        {/* Red/Blue Divider Line */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-[#e61f2a] via-[#0067ff] to-[#e61f2a]" />
+        
+        <div className="max-w-[1280px] mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 py-10 text-xs sm:text-sm text-zinc-500">
+          {/* Logo Column */}
+          <div className="flex flex-col items-start text-left">
+            
+            <Link href="/" className="flex items-center no-underline text-wapi-ink shrink-0 relative mb-4">
+              <Image src="/logo2.svg" alt="Gusion Mail Logo" width="150" height="34" priority />
+              <span className="text-red-600 -top-4.5 relative text-base font-medium -ml-1">Mail</span>
+            </Link>
+            <p className="text-xs text-zinc-500 leading-relaxed font-normal max-w-[200px]">
+              The secure, keyboard-first AI email workspace built for modern professionals.
             </p>
+          </div>
+
+          {/* Column 2 */}
+          <div className="text-left">
+            <h3 className="font-bold text-zinc-900 mb-3">Integrations</h3>
+            <ul className="flex flex-col gap-2 font-normal text-xs text-zinc-650">
+              <li>Gmail API sync</li>
+              <li>Google Calendar API</li>
+              <li>Workspace Domain delegate</li>
+              <li>OAuth2 Authentication scopes</li>
+            </ul>
+          </div>
+
+          {/* Column 3 */}
+          <div className="text-left">
+            <h3 className="font-bold text-zinc-900 mb-3">Security & Laws</h3>
+            <ul className="flex flex-col gap-2 font-normal text-xs text-zinc-650">
+              <li>100% Mumbai Cloud hosting</li>
+              <li>DPDP Privacy Guard compliant</li>
+              <li>No email storage architecture</li>
+              <li>Local cache DB encryption</li>
+            </ul>
+          </div>
+
+          {/* Column 4 */}
+          <div className="text-left">
+            <h3 className="font-bold text-zinc-900 mb-3">Contact Us</h3>
+            <p className="text-xs leading-normal mb-3 font-normal text-zinc-650">
+              Need custom integrations or corporate team workspace hosting?
+            </p>
+            <button
+              onClick={() => signIn("google")}
+              className="inline-flex items-center gap-1 bg-[#0067ff] hover:bg-[#0052cc] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition cursor-pointer"
+            >
+              <span>Book Enterprise Demo</span>
+              <ExternalLink size={10} />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Strip */}
+        <div className="border-t border-zinc-200/50 max-w-[1280px] mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400 font-normal">
+          <span>© {new Date().getFullYear()} Gusion Mail. All rights reserved.</span>
+          <div className="flex gap-4">
+            <Link href="/terms" className="hover:text-zinc-600 transition no-underline">Terms</Link>
+            <Link href="/privacy" className="hover:text-zinc-600 transition no-underline">Privacy</Link>
+            <Link href="/privacy#dpdp" className="hover:text-zinc-600 transition no-underline">DPDP</Link>
+            <Link href="/privacy#security" className="hover:text-zinc-600 transition no-underline">Security</Link>
           </div>
         </div>
       </footer>
+
     </div>
   );
 }
