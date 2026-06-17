@@ -11,6 +11,15 @@ jobs:
     name: Build & Test
     timeout-minutes: 15
     runs-on: ubuntu-latest
+    env:
+      # Provide dummy env vars required by T3 stack for CI build & tests to pass
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      AUTH_GOOGLE_ID: dummy
+      AUTH_GOOGLE_SECRET: dummy
+      DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
+      RESEND_API_KEY: re_dummy
+      AUTH_SECRET: dummy_secret_at_least_32_characters_long
+      CORSAIR_KEK: dummy_corsair_kek
 
     steps:
     - name: Checkout repository
@@ -27,20 +36,15 @@ jobs:
 
     - name: Run Linters & Typecheck
       run: npm run check
-      # You can ignore typecheck errors if you're gradually migrating, but ideally it should pass
+
+    - name: Build project
+      run: npm run build
 
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
 
     - name: Run Playwright Tests
       run: npx playwright test
-      env:
-        # Provide dummy env vars required by T3 stack for CI to pass
-        NEXT_PUBLIC_APP_URL: http://localhost:3000
-        AUTH_GOOGLE_ID: dummy
-        AUTH_GOOGLE_SECRET: dummy
-        DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
-        RESEND_API_KEY: re_dummy
 
     - name: Upload Playwright Report
       if: always()
