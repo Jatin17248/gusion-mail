@@ -3,7 +3,7 @@ import { provisionCorsairTenant } from "@/server/lib/corsair-setup";
 import { env } from "@/env";
 import { z } from "zod";
 import { db, conn } from "@/server/db";
-import { users, templates, emailMeta, schedulingLinks, bookings, contacts, referrals } from "@/server/db/schema";
+import { users, templates, emailMeta, schedulingLinks, bookings, contacts, referrals, accounts } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createCorsairDatabase } from "corsair/db";
@@ -18,6 +18,13 @@ export const authRouter = createTRPCRouter({
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
     }
     return user;
+  }),
+
+  hasGoogleOAuth: protectedProcedure.query(async ({ ctx }) => {
+    const account = await db.query.accounts.findFirst({
+      where: eq(accounts.userId, ctx.session.user.id),
+    });
+    return { linked: !!account?.access_token };
   }),
 
   provisionTenant: protectedProcedure.mutation(async ({ ctx }) => {

@@ -12,8 +12,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMobileOptimization } from "@/hooks/useMobileOptimization";
 
-
-
 interface NavbarProps {
   children: React.ReactNode;
   className?: string;
@@ -109,7 +107,7 @@ export const NavBody = ({ children, className, visible }: NavBodyProps) => {
         minWidth: "800px",
       }}
       className={cn(
-        "relative z-[60] mx-auto hidden w-full max-w-7xl flex-row items-center justify-between self-start rounded-full bg-transparent px-4 py-2 lg:flex dark:bg-transparent",
+        "relative z-60 mx-auto hidden w-full max-w-7xl flex-row items-center justify-between self-start rounded-full bg-transparent px-4 py-2 lg:flex dark:bg-transparent",
         visible && "smal-widt-head bg-white/80 ",
         className,
       )}

@@ -164,7 +164,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
                   height={45}
                 />
               </Link>
-              <p className="text-[#0067ff] font-medium italic text-sm mt-2">Keyboard-first navigation meets AI speed.</p>
+              <p className="text-indigo-500 font-medium italic text-sm mt-2">Keyboard-first navigation meets AI speed.</p>
               <p className="mt-1 text-gray-500 text-sm text-justify">
                 The secure, keyboard-first AI email workspace built for modern professionals. Connect your Gmail and Google Workspace accounts to experience lightning-fast workflow speeds.
               </p>

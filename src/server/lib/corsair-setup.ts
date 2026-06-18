@@ -1,10 +1,9 @@
 import { createAccountKeyManager, generateDEK, encryptDEK } from "corsair/core";
-import { db } from "@/server/db";
+import { createCorsairDatabase } from "corsair/db";
+import { db, conn } from "@/server/db";
 import { accounts, users, corsairIntegrations, corsairAccounts } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { env } from "@/env";
-
-type DBType = Parameters<typeof createAccountKeyManager>[0]["database"];
 
 export async function provisionCorsairTenant(userId: string, tenantId: string, kek: string) {
   // 1. Fetch Google account for this user from DB
@@ -64,7 +63,7 @@ export async function provisionCorsairTenant(userId: string, tenantId: string, k
       integrationName: pluginId,
       tenantId,
       kek,
-      database: db as unknown as DBType,
+      database: createCorsairDatabase(conn),
     });
 
     await accountKm.set_access_token(userAccount.access_token);

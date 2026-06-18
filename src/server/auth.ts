@@ -2,7 +2,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
+import { users, accounts, sessions, verificationTokens } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { env } from "@/env";
 
@@ -23,7 +23,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: DrizzleAdapter(db),
+  adapter: DrizzleAdapter(db, { usersTable: users, accountsTable: accounts, sessionsTable: sessions, verificationTokensTable: verificationTokens }),
   session: { strategy: "jwt" },
   providers: [
     GoogleProvider({
@@ -90,6 +90,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             : [];
           token.isStaff = dbUser.isStaff === true || (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) || false;
           token.suspendedAt = dbUser.suspendedAt ? dbUser.suspendedAt.toISOString() : null;
+          token.gmailConnected = dbUser.gmailConnected ?? false;
+          token.calendarConnected = dbUser.calendarConnected ?? false;
+          token.corsairTenantId = dbUser.corsairTenantId;
         } else {
           token.isStaff = false;
           token.suspendedAt = null;

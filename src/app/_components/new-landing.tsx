@@ -232,7 +232,7 @@ function InboxSimulator() {
         </div>
 
         {/* Mail grid */}
-        <div className="grid grid-cols-[140px_1fr] h-[370px] bg-zinc-950">
+        <div className="grid grid-cols-[140px_1fr] h-92.5 bg-zinc-950">
           {/* Left Inbox List */}
           <div className="border-r border-zinc-850 flex flex-col h-full bg-zinc-950/80">
             <div className="p-3 border-b border-zinc-850/60 flex items-center">
@@ -287,7 +287,7 @@ function InboxSimulator() {
                   <Bot size={10} />
                   <span>DESCRIBE REPLY (AI AGENT COMMAND)</span>
                 </div>
-                <div className="font-mono text-[9.5px] text-zinc-200 min-h-[14px] flex items-center leading-normal">
+                <div className="font-mono text-[9.5px] text-zinc-200 min-h-3.5 flex items-center leading-normal">
                   <span>{typedPrompt}</span>
                   {isTypingPrompt && <span className="w-1 h-3.5 bg-indigo-500 animate-pulse ml-0.5" />}
                 </div>
@@ -345,7 +345,7 @@ function InboxSimulator() {
       </div>
 
       {/* Floating Metric Widgets (placed OUTSIDE the overflow-hidden container) */}
-      <div className="absolute top-12 -left-6 w-[170px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob1 z-20 hover:scale-105 transition-transform">
+      <div className="absolute top-12 -left-6 w-42.5 bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob1 z-20 hover:scale-105 transition-transform">
         <div className="flex items-center gap-1.5 mb-1">
           <Zap size={11} className="text-indigo-400" />
           <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Response Speed</span>
@@ -354,7 +354,7 @@ function InboxSimulator() {
         <div className="text-[9px] text-zinc-400 mt-1">AI draft generation speed</div>
       </div>
 
-      <div className="absolute -bottom-2 -right-2 w-[190px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob2 z-20 hover:scale-105 transition-transform">
+      <div className="absolute -bottom-2 -right-2 w-47.5 bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob2 z-20 hover:scale-105 transition-transform">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-indigo-500/10 border border-indigo-500/20 rounded-lg grid place-items-center text-indigo-400 shrink-0">
             🤖

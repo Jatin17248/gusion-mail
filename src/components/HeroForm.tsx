@@ -7,6 +7,7 @@ import { formSchema } from "@/schemas/registerForm.schema";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -23,12 +24,10 @@ const HeroForm = () => {
   });
 
   const [loading, setLoading] = useState(false);
-  const [serverError, setServerError] = useState("");
 
   const onSubmit = async (data: FormValues) => {
     try {
       setLoading(true);
-      setServerError("");
 
       const res = await fetch("/api/user/register", {
         method: "POST",
@@ -39,24 +38,29 @@ const HeroForm = () => {
       });
 
       if (res.status === 409) {
-        setServerError("User already exists with this email or phone number");
-        alert(
-          "An account already exists with this email or phone number. Please log in to continue."
+        toast.error(
+          "An account already exists with this email or phone number. Redirecting to login..."
         );
-        router.push("/login");
+        setTimeout(() => {
+          router.push("/login");
+        }, 1500);
         return;
       }
 
       if (!res.ok) {
         const errorData = await res.json();
-        setServerError(errorData?.message || "OOPS! Something Went Wrong");
+        toast.error(errorData?.message || "OOPS! Something Went Wrong");
         return;
       }
 
-      alert("Registration successful! Please check your email to verify your account before logging in.");
-      router.push("/login");
+      toast.success(
+        "Registration successful! Please check your email to verify your account before logging in."
+      );
+      setTimeout(() => {
+        router.push("/login");
+      }, 2000);
     } catch {
-      setServerError("Network error. Please try again.");
+      toast.error("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -65,37 +69,37 @@ const HeroForm = () => {
   return (
     <>
       <form
-        className="flex flex-col gap-3.5 w-full"
+        className="flex flex-col gap-4.5 w-full"
         onSubmit={handleSubmit(onSubmit)}
       >
-        <div>
+        <div className="relative">
           <input
-            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-[1] h-[50px] leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
+            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-1 h-12.5 leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
             placeholder="Full Name"
             style={{ borderColor: errors.name ? "#ff0000" : "" }}
             {...register("name")}
           />
           {errors.name && (
-            <p className="text-red-500 text-[12px] mt-1 pl-4">{errors.name.message}</p>
+            <p className="text-red-500 text-[10px] absolute left-5 -bottom-3.5 z-10 font-medium">{errors.name.message}</p>
           )}
         </div>
 
-        <div>
+        <div className="relative">
           <input
-            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-[1] h-[50px] leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
+            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-1 h-12.5 leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
             placeholder="Email"
             {...register("email")}
             style={{ borderColor: errors.email ? "#ff0000" : "" }}
           />
           {errors.email && (
-            <p className="text-red-500 text-[12px] mt-1 pl-4">{errors.email.message}</p>
+            <p className="text-red-500 text-[10px] absolute left-5 -bottom-3.5 z-10 font-medium">{errors.email.message}</p>
           )}
         </div>
 
         <div className="relative">
           <input
             type={show ? "text" : "password"}
-            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-[1] h-[50px] leading-none bg-white border border-[#ebd5bc] rounded-full pl-6 pr-12 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
+            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-1 h-12.5 leading-none bg-white border border-[#ebd5bc] rounded-full pl-6 pr-12 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
             style={{ borderColor: errors.password ? "#ff0000" : "" }}
             placeholder="Password"
             {...register("password")}
@@ -108,19 +112,19 @@ const HeroForm = () => {
             {show ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
           {errors.password && (
-            <p className="text-red-500 text-[12px] mt-1 pl-4">{errors.password.message}</p>
+            <p className="text-red-500 text-[10px] absolute left-5 -bottom-3.5 z-10 font-medium">{errors.password.message}</p>
           )}
         </div>
 
-        <div>
+        <div className="relative">
           <input
-            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-[1] h-[50px] leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
+            className="w-full text-zinc-800 block text-[15px] appearance-none relative z-1 h-12.5 leading-none bg-white border border-[#ebd5bc] rounded-full px-6 focus:outline-none focus:border-[#d9b58f] transition-all placeholder-zinc-400"
             style={{ borderColor: errors.phone ? "#ff0000" : "" }}
             placeholder="Phone"
             {...register("phone")}
           />
           {errors.phone && (
-            <p className="text-red-500 text-[12px] mt-1 pl-4">{errors.phone.message}</p>
+            <p className="text-red-500 text-[10px] absolute left-5 -bottom-3.5 z-10 font-medium">{errors.phone.message}</p>
           )}
         </div>
 
@@ -137,14 +141,10 @@ const HeroForm = () => {
 
         <button
           disabled={loading}
-          className="mt-2 w-full h-[50px] bg-[#e31b23] hover:bg-[#c81822] text-white rounded-full font-bold text-[15px] tracking-wider uppercase transition cursor-pointer flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed border-none"
+          className="mt-2 w-full h-12.5 bg-[#e31b23] hover:bg-[#c81822] text-white rounded-full font-bold text-[15px] tracking-wider uppercase transition cursor-pointer flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed border-none"
         >
           {loading ? "Submitting..." : "GET STARTED"}
         </button>
-
-        {serverError && (
-          <p className="text-red-600 text-sm font-medium text-center mt-2">{serverError}</p>
-        )}
       </form>
     </>
   );

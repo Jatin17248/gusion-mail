@@ -141,12 +141,12 @@ export default function ModalBody1() {
       <ModalContent>
         <h4 className="text-lg md:text-2xl  text-white font-bold text-center mb-4">
           Manage emails with{" "}
-          <span className="px-1 py-0.5 rounded-md bg-white text-[#0067ff] border border-gray-200">
+          <span className="px-1 py-0.5 rounded-md bg-white text-indigo-500 border border-gray-200">
             Speed!
           </span>
           {" "} on Gusion Mail
         </h4>
-        <div className="flex justify-center items-center max-[400px]:hidden">
+        <div className="flex justify-center items-center max-100:hidden">
           {images.map((image, idx) => (
             <motion.div
               key={"images" + idx}

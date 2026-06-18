@@ -11,6 +11,10 @@ if (!databaseUrl) {
 
 const sql = postgres(databaseUrl);
 
+
+
+
+
 async function run() {
   console.log("Running manual schema updates...");
   try {

@@ -116,14 +116,14 @@ export const ModalBody = ({
             opacity: 0,
             backdropFilter: "blur(0px)",
           }}
-          className={`fixed [perspective:800px] [transform-style:preserve-3d] inset-0 h-full w-full  flex items-center justify-center z-[101] !pt-10 ${isHeight && isDesktop ? 'flex-col' : ''} `}
+          className={`fixed [perspective:800px] [transform-style:preserve-3d] inset-0 h-full w-full  flex items-center justify-center z-101 !pt-10 ${isHeight && isDesktop ? 'flex-col' : ''} `}
         >
           <Overlay enableBlur={enableBlur} />
 
           <motion.div
             ref={modalRef}
             className={cn(
-              "min-h-[50%] max-h-[100%] 2xl:max-w-[40%] md:max-w-[75%] lg:max-w-[65%]  border border-transparent dark:border-neutral-800 md:rounded-2xl relative z-50 flex flex-col flex-1 overflow-hidden bg-transparent",
+              "min-h-[50%] max-h-full 2xl:max-w-[40%] md:max-w-[75%] lg:max-w-[65%]  border border-transparent dark:border-neutral-800 md:rounded-2xl relative z-50 flex flex-col flex-1 overflow-hidden bg-transparent",
               className
             )}
             initial={shouldReduceAnimations ? {
@@ -157,7 +157,7 @@ export const ModalBody = ({
           </motion.div>
 
           {isDesktop && isHeight && (
-            <section className="relative px-4 max-w-270 text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 text-[9rem] sm:text-[14rem] md:text-[16rem] lg:text-[18rem] leading-[1] pointer-events-none font-bold -mb-[11%] sm:-mb-[7%] duration-200 ease-in-out l-10">
+            <section className="relative px-4 max-w-270 text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 text-[9rem] sm:text-[14rem] md:text-[16rem] lg:text-[18rem] leading-none pointer-events-none font-bold -mb-[11%] sm:-mb-[7%] duration-200 ease-in-out l-10">
               <div className="text-[#fae4c5] animate-[pulse_4s_infinite] drop-shadow-xl select-none opacity-40 z-100">
                 Gusion
               </div>

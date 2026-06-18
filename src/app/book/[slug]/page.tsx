@@ -209,7 +209,7 @@ export default function BookPage({ params }: PageProps) {
             <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-500">Host</p>
             <h2 className="text-lg font-bold text-zinc-200">{data.hostName}</h2>
             
-            <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-zinc-50 bg-linear-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="mt-6 text-2xl font-extrabold tracking-tight  bg-linear-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
               {data.link.title}
             </h1>
             
@@ -233,7 +233,7 @@ export default function BookPage({ params }: PageProps) {
         {/* Right side scheduler/form pane */}
         <div className="md:col-span-7 p-6 sm:p-8 flex flex-col justify-between">
           {!selectedSlot ? (
-            <div className="flex-1 flex flex-col min-h-[400px]">
+            <div className="flex-1 flex flex-col min-h-100">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-4">
                 Select Date & Time
               </h3>

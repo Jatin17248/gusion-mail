@@ -67,10 +67,10 @@ export default function FeatureSlider({ need = 2 }) {
                 startIndex % 2 === 0 ? "bg-[#dbeaff]" : "bg-[#ff00002e]"
               } backdrop-blur-md`}
             >
-              <div className="flex items-center justify-center md:max-w-[200px] lg:max-w-[305px] xl:max-w-[375px] 2xl:max-w-[400px] leading-normal flex-col">
+              <div className="flex items-center justify-center md:max-w-50 lg:max-w-[305px] xl:max-w-[375px] 2xl:max-w-100 leading-normal flex-col">
                 <span className="flex justify-center items-center h-12.5 w-15 rounded-[28px] aspect-square">
                   <Icon
-                    className="h-[80px] w-[80px] transition-all duration-500"
+                    className="h-20 w-20 transition-all duration-500"
                     style={{ color: iconColors[startIndex % 2 ? 0 : 1] }}
                   />
                 </span>
@@ -99,11 +99,11 @@ export default function FeatureSlider({ need = 2 }) {
         return (
           <div
             key={i}
-            className="flex align-center justify-center md:max-w-[200px] lg:max-w-[305px] xl:max-w-[375px] 2xl:max-w-[400px] leading-normal"
+            className="flex align-center justify-center md:max-w-50 lg:max-w-[305px] xl:max-w-[375px] 2xl:max-w-100 leading-normal"
           >
-            <span className="flex justify-center items-center lg:w-[75px] lg:h-[75px] xl:w-[100px] xl:h-[100px] rounded-[28px] aspect-square mr-4">
+            <span className="flex justify-center items-center lg:w-[75px] lg:h-[75px] xl:w-25 xl:h-25 rounded-[28px] aspect-square mr-4">
               <Icon
-                className="h-[80px] w-[80px]"
+                className="h-20 w-20"
                 style={{ color: iconColors[i] }}
               />
             </span>
