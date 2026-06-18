@@ -45,9 +45,13 @@ vi.mock("ai", () => ({
   generateObject: vi.fn(),
 }));
 
-vi.mock("@ai-sdk/google", () => ({
-  google: vi.fn(),
-}));
+vi.mock("@ai-sdk/google", () => {
+  const mockModel = vi.fn();
+  return {
+    createGoogleGenerativeAI: vi.fn().mockReturnValue(mockModel),
+    google: mockModel,
+  };
+});
 
 vi.mock("@/server/lib/realtime", () => ({
   publishUserEvent: vi.fn(),

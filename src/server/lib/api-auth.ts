@@ -18,9 +18,11 @@ export async function validateApiKey(
   if (!apiKeyHeader) return null;
 
   // Check if API is disabled globally
-  const apiDisabledConfig = await db.query.systemConfigs.findFirst({
-    where: eq(systemConfigs.key, "disableApi"),
-  });
+  const apiDisabledConfig = db.query.systemConfigs
+    ? await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "disableApi"),
+      })
+    : null;
   if (apiDisabledConfig && JSON.parse(apiDisabledConfig.value) === true) {
     return null;
   }

@@ -29,9 +29,11 @@ export const bulkRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Check if bulk campaigns are disabled globally
-      const disableBulkConfig = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, "disableBulkSend"),
-      });
+      const disableBulkConfig = db.query.systemConfigs
+        ? await db.query.systemConfigs.findFirst({
+            where: eq(systemConfigs.key, "disableBulkSend"),
+          })
+        : null;
       if (disableBulkConfig && JSON.parse(disableBulkConfig.value) === true) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -91,9 +93,11 @@ export const bulkRouter = createTRPCRouter({
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       // Check if bulk campaigns are disabled globally
-      const disableBulkConfig = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, "disableBulkSend"),
-      });
+      const disableBulkConfig = db.query.systemConfigs
+        ? await db.query.systemConfigs.findFirst({
+            where: eq(systemConfigs.key, "disableBulkSend"),
+          })
+        : null;
       if (disableBulkConfig && JSON.parse(disableBulkConfig.value) === true) {
         throw new TRPCError({
           code: "FORBIDDEN",

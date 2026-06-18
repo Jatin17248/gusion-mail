@@ -6,7 +6,7 @@ import {
   getHeader,
 } from "@/server/lib/email";
 import { getTenant } from "@/server/lib/tenant";
-import { refreshCorsairTokens } from "@/server/lib/corsair-setup";
+import { provisionCorsairTenant } from "@/server/lib/corsair-setup";
 import { env } from "@/env";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
@@ -234,22 +234,6 @@ export const gmailRouter = createTRPCRouter({
       if (cached) return cached;
 
       const tenant = getTenant(ctx.session.user.corsairTenantId);
-      const dbMessage = await tenant.gmail.db.messages.findByEntityId(input.id);
-
-      if (dbMessage?.data.body || dbMessage?.data.subject) {
-        const result: MessageDetails = {
-          id: dbMessage.entity_id,
-          threadId: dbMessage.data.threadId ?? "",
-          subject: dbMessage.data.subject ?? "",
-          from: dbMessage.data.from ?? "",
-          to: dbMessage.data.to ?? "",
-          body: dbMessage.data.body ?? dbMessage.data.snippet ?? "",
-          snippet: dbMessage.data.snippet ?? "",
-          date: dbMessage.data.internalDate ?? null,
-        };
-        await redis.set(cacheKey, result, { ex: 300 });
-        return result;
-      }
 
       try {
         const message = await tenant.gmail.api.messages.get({
@@ -313,16 +297,24 @@ export const gmailRouter = createTRPCRouter({
       // Corsair's key manager. Access tokens expire in 1h; without this step,
       // syncs silently return 0 once the token provisioned at sign-up goes stale.
       if (ctx.session.user.corsairTenantId) {
-        const hasOAuth = await refreshCorsairTokens(
-          ctx.session.user.id,
-          ctx.session.user.corsairTenantId,
-          env.CORSAIR_KEK,
-        );
-        if (!hasOAuth) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Google account connection is invalid. Please reconnect.",
-          });
+        try {
+          // provisionCorsairTenant re-encrypts both integration credentials
+          // (client_id/client_secret) AND account tokens on every sync, ensuring
+          // keyBuilder never fails due to stale plaintext or rotated DEKs.
+          await provisionCorsairTenant(
+            ctx.session.user.id,
+            ctx.session.user.corsairTenantId,
+            env.CORSAIR_KEK,
+          );
+        } catch (provisionErr) {
+          const msg = provisionErr instanceof Error ? provisionErr.message : String(provisionErr);
+          if (msg.includes("No Google OAuth credentials")) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: "Google account connection is invalid. Please reconnect.",
+            });
+          }
+          throw provisionErr;
         }
       }
 
@@ -477,7 +469,7 @@ export const gmailRouter = createTRPCRouter({
         : input.body;
 
       if (ctx.session.user.corsairTenantId) {
-        await refreshCorsairTokens(ctx.session.user.id, ctx.session.user.corsairTenantId, env.CORSAIR_KEK);
+        await provisionCorsairTenant(ctx.session.user.id, ctx.session.user.corsairTenantId, env.CORSAIR_KEK);
       }
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       const raw = encodeRawEmail({

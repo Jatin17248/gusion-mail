@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Sparkles,
   Mail,
@@ -10,6 +10,112 @@ import {
 import DOMPurify from "isomorphic-dompurify";
 import { ContactsSidePanel } from "@/app/_components/contacts-panel";
 import { formatSender, parseEmailAddress } from "@/app/_components/dashboard";
+
+function SafeHtmlRenderer({ html }: { html: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState("200px");
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (iframeRef.current?.contentWindow?.document?.body) {
+        const doc = iframeRef.current.contentWindow.document;
+        const body = doc.body;
+        const htmlElement = doc.documentElement;
+        
+        // Calculate total content height
+        const newHeight = Math.max(
+          body.scrollHeight,
+          body.offsetHeight,
+          htmlElement.clientHeight,
+          htmlElement.scrollHeight,
+          htmlElement.offsetHeight
+        );
+        setHeight(`${newHeight}px`);
+      }
+    };
+
+    const iframe = iframeRef.current;
+    if (iframe) {
+      iframe.addEventListener("load", handleResize);
+
+      // Trigger a resize check after styles/images settle
+      const timer = setTimeout(handleResize, 150);
+
+      let observer: MutationObserver | null = null;
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc) {
+          observer = new MutationObserver(handleResize);
+          observer.observe(doc.body, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+        }
+      } catch (e) {
+        console.warn("Could not setup MutationObserver on iframe:", e);
+      }
+
+      return () => {
+        iframe.removeEventListener("load", handleResize);
+        clearTimeout(timer);
+        observer?.disconnect();
+      };
+    }
+  }, [html]);
+
+  const sanitized = DOMPurify.sanitize(html, {
+    ADD_ATTR: ["target"],
+  });
+
+  const srcDocHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_blank">
+        <style>
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1f2937;
+            background-color: #ffffff;
+            word-wrap: break-word;
+          }
+          img {
+            max-width: 100% !important;
+            height: auto !important;
+          }
+          a {
+            color: #4f46e5;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        ${sanitized}
+      </body>
+    </html>
+  `;
+
+  return (
+    <div className="w-full rounded-2xl bg-white p-1 border border-zinc-800 shadow-xl overflow-hidden">
+      <iframe
+        ref={iframeRef}
+        srcDoc={srcDocHtml}
+        style={{
+          width: "100%",
+          height,
+          border: "none",
+          backgroundColor: "#ffffff",
+          display: "block",
+        }}
+      />
+    </div>
+  );
+}
 
 interface ReadingPaneProps {
   messageLoading: boolean;
@@ -263,13 +369,17 @@ export function ReadingPane({
               )}
             </div>
 
-            <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(selectedMessage.body),
-                }}
-              />
-            </div>
+            {/<[a-z][\s\S]*>/i.test(selectedMessage.body) ? (
+              <SafeHtmlRenderer html={selectedMessage.body} />
+            ) : (
+              <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(selectedMessage.body),
+                  }}
+                />
+              </div>
+            )}
 
             {/* Inline Reply Form */}
             <div className="pt-6 border-t border-zinc-900">

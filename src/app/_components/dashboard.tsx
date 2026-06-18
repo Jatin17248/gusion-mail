@@ -473,7 +473,11 @@ export function Dashboard() {
       setSmartReplies([]);
       getSmartReplies.mutate({ messageId: activeMessageId });
     }
-  }, [activeMessageId, getSmartReplies]);
+    // getSmartReplies intentionally excluded: the mutation object gets a new reference on
+    // every state update (isPending → isSuccess → etc.), which would re-trigger this effect
+    // and cause an infinite loop. We only want to fire when the selected message changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMessageId]);
 
   const archiveEmail = api.gmail.archiveEmail.useMutation({
     onMutate: async ({ id }) => {

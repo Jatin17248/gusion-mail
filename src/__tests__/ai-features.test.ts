@@ -43,9 +43,13 @@ vi.mock("ai", () => ({
   generateObject: vi.fn(),
 }));
 
-vi.mock("@ai-sdk/google", () => ({
-  google: vi.fn(),
-}));
+vi.mock("@ai-sdk/google", () => {
+  const mockModel = vi.fn();
+  return {
+    createGoogleGenerativeAI: vi.fn().mockReturnValue(mockModel),
+    google: mockModel,
+  };
+});
 
 describe("AI Features Router", () => {
   const mockCtx = {
@@ -75,8 +79,11 @@ describe("AI Features Router", () => {
 
   it("should generate email draft using aiCompose", async () => {
     vi.mocked(hasActivePlanOrTrial).mockResolvedValue(true);
-    vi.mocked(generateText).mockResolvedValue({
-      text: "Draft email content",
+    vi.mocked(generateObject).mockResolvedValue({
+      object: {
+        subject: "Mock Subject",
+        body: "Draft email content",
+      },
     } as any);
 
     const caller = appRouter.createCaller(mockCtx as any);
@@ -86,8 +93,8 @@ describe("AI Features Router", () => {
       styleContext: "formal",
     });
 
-    expect(result.body).toBeDefined();
-    expect(result.subject).toBeDefined();
+    expect(result.body).toBe("Draft email content");
+    expect(result.subject).toBe("Mock Subject");
     expect(generateObject).toHaveBeenCalled();
   });
 

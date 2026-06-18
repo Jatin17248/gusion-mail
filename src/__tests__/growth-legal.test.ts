@@ -65,6 +65,11 @@ vi.mock("@/server/db", () => {
   };
 });
 
+vi.mock("@/server/lib/corsair-setup", () => ({
+  provisionCorsairTenant: vi.fn().mockResolvedValue(undefined),
+  refreshCorsairTokens: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/server/lib/tenant", () => ({
   getTenant: vi.fn(),
 }));

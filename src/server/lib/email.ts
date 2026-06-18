@@ -159,14 +159,22 @@ type GmailPart = {
 export function extractBodyFromPayload(payload?: GmailPart): string {
   if (!payload) return "";
 
-  if (payload.mimeType === "text/plain" && payload.body?.data) {
-    return decodeBase64Url(payload.body.data);
-  }
+  const findPart = (part: GmailPart, mimeType: string): string | null => {
+    if (part.mimeType === mimeType && part.body?.data) {
+      return decodeBase64Url(part.body.data);
+    }
+    for (const subPart of part.parts ?? []) {
+      const found = findPart(subPart, mimeType);
+      if (found) return found;
+    }
+    return null;
+  };
 
-  for (const part of payload.parts ?? []) {
-    const text = extractBodyFromPayload(part);
-    if (text) return text;
-  }
+  const html = findPart(payload, "text/html");
+  if (html) return html;
+
+  const plain = findPart(payload, "text/plain");
+  if (plain) return plain;
 
   if (payload.body?.data) {
     return decodeBase64Url(payload.body.data);

@@ -55,6 +55,8 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       where: eq(users.id, userId),
     });
 
+    let activeUser = dbUser;
+
     if (dbUser) {
       const adminEmails = env.PRODUCT_ADMIN_EMAILS
         ? env.PRODUCT_ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase())
@@ -75,6 +77,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
             adminUserId = userId;
             userId = impId;
             isImpersonating = true;
+            activeUser = targetUser;
             
             // Override session.user details for tRPC context
             session.user = {
@@ -94,11 +97,6 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
     }
 
     // Now proceed with normal activeOrgId / org member retrieval for the active user ID
-    // 1. Fetch user to check activeOrgId
-    const activeUser = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-
     if (activeUser) {
       let activeOrgId = activeUser.activeOrgId;
       let memberRecord = null;

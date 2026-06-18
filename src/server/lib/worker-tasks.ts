@@ -196,9 +196,11 @@ export async function processJobs() {
   }
 
   // 4. Process Running Bulk Campaigns
-  const disableBulkSendConfig = await db.query.systemConfigs.findFirst({
-    where: eq(systemConfigs.key, "disableBulkSend"),
-  });
+  const disableBulkSendConfig = db.query.systemConfigs
+    ? await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "disableBulkSend"),
+      })
+    : null;
   const isBulkSendDisabled = disableBulkSendConfig && JSON.parse(disableBulkSendConfig.value) === true;
 
   if (!isBulkSendDisabled) {
