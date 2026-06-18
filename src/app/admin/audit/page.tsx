@@ -27,7 +27,7 @@ export default function AdminAuditPage() {
         </div>
         <Button
           onClick={() => {
-            refetch();
+            void refetch();
           }}
           variant="outline"
           className="border-zinc-800 hover:bg-zinc-800/40 text-zinc-300 text-xs"

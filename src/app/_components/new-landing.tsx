@@ -5,6 +5,9 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
+import Header from "@/components/Header";
+import Hero from "@/components/Hero";
+import FooterFixed from "@/components/FooterFixed";
 import {
   Keyboard,
   Cpu,
@@ -379,176 +382,12 @@ function InboxSimulator() {
 /* ─── MAIN NEW LANDING PAGE ─── */
 export function NewLanding() {
   const [activeFAQ, setActiveFAQ] = useState<number | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#fff2e0] text-zinc-800 font-sans antialiased overflow-x-hidden">
       
-      {/* ─── NAVBAR ─── */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 transition-colors">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center no-underline text-wapi-ink shrink-0 relative">
-              <Image src="/logo2.svg" alt="Gusion Mail Logo" width="150" height="34" priority />
-              <span className="text-red-600 -top-4.5 relative text-base font-medium -ml-1">Mail</span>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-6">
-              {NAV_ITEMS.map((it) => (
-                <Link
-                  key={it.label}
-                  href={it.href}
-                  className="text-[13px] font-semibold text-zinc-500 hover:text-indigo-600 transition no-underline"
-                >
-                  {it.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => signIn("google")}
-              className="hidden sm:inline-flex items-center text-[13px] font-semibold text-zinc-600 hover:text-indigo-600 transition cursor-pointer"
-            >
-              Log In
-            </button>
-            <button
-              onClick={() => signIn("google")}
-              className="px-4 py-2 rounded-full bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/20 hover:shadow-indigo-700/30 flex items-center gap-1 cursor-pointer"
-            >
-              <span>Get Started</span>
-              <ArrowRight size={13} />
-            </button>
-
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden flex flex-col gap-1 p-2 rounded-lg hover:bg-zinc-50 transition cursor-pointer"
-              aria-label="Toggle Menu"
-            >
-              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-transform ${mobileMenuOpen ? "rotate-45 translate-y-1.5" : ""}`} />
-              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-opacity ${mobileMenuOpen ? "opacity-0" : ""}`} />
-              <span className={`block w-5 h-0.5 bg-zinc-600 rounded-full transition-transform ${mobileMenuOpen ? "-rotate-45 -translate-y-1.5" : ""}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu panel */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-white border-t border-zinc-100 px-6 py-4 flex flex-col gap-3.5"
-            >
-              {NAV_ITEMS.map((it) => (
-                <Link
-                  key={it.label}
-                  href={it.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="text-sm font-semibold text-zinc-600 hover:text-indigo-600 no-underline py-1.5 block border-b border-zinc-50 last:border-0"
-                >
-                  {it.label}
-                </Link>
-              ))}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => { setMobileMenuOpen(false); void signIn("google"); }}
-                  className="flex-1 text-center py-2.5 rounded-full border border-zinc-200 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
-                >
-                  Log In
-                </button>
-                <button
-                  onClick={() => { setMobileMenuOpen(false); void signIn("google"); }}
-                  className="flex-1 text-center py-2.5 rounded-full bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md cursor-pointer"
-                >
-                  Get Started
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
-
-      {/* ─── HERO SECTION ─── */}
-      <section className="relative px-6 pt-16 pb-20 overflow-hidden bg-[#fff2e0]">
-        {/* Soft Background Gradients */}
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,#EAF4EE,transparent_45%),radial-gradient(circle_at_20%_80%,#FFF5F5,transparent_45%)] opacity-80" />
-
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-16 items-center relative z-10">
-          
-          {/* Left Copy */}
-          <div className="flex flex-col items-start text-left">
-            <Link
-              href="#bento"
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-200 hover:border-zinc-300 rounded-full text-xs text-zinc-600 mb-6 transition no-underline"
-            >
-              <span className="bg-purple-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                New
-              </span>
-              <span>Morning Brief digest is now in beta →</span>
-            </Link>
-
-            <h1 className="font-bold text-[clamp(40px,5.5vw,72px)] leading-[0.98] tracking-tight text-[#012b57] mb-6">
-              The AI-first email <br />
-              client for <span className="text-indigo-600 italic">high-growth</span> teams.
-            </h1>
-
-            <p className="text-base sm:text-lg text-zinc-500 leading-relaxed max-w-135 mb-8 font-normal">
-              Gusion Mail syncs with Gmail and Workspace to deliver speed. Draft complete replies in seconds, summarize long threads automatically, and manage contacts seamlessly in a beautiful, light interface.
-            </p>
-
-            <div className="flex flex-wrap gap-3 mb-8">
-              <button
-                onClick={() => signIn("google")}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[14px] font-bold bg-[#012b57] text-white hover:bg-indigo-600 transition shadow-lg hover:shadow-indigo-600/35 hover:-translate-y-0.5 group cursor-pointer"
-              >
-                <span>Connect Gmail Free</span>
-                <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-              </button>
-              <Link
-                href="#pricing"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[14px] font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 hover:-translate-y-0.5 transition no-underline cursor-pointer"
-              >
-                View Pricing Plans
-              </Link>
-            </div>
-
-            {/* Badges Strip */}
-            <div className="flex flex-wrap gap-3 items-stretch w-full pt-4 border-t border-zinc-150">
-              {/* Trust Badge 1 */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50/70 border border-zinc-200 rounded-xl animate-badge-glow transition-all hover:scale-[1.02] cursor-default">
-                <div className="w-6 h-6 rounded-lg bg-green-500/10 grid place-items-center text-green-600 shrink-0">
-                  <ShieldCheck size={13} />
-                </div>
-                <div className="leading-none text-left">
-                  <div className="text-[11px] font-bold text-zinc-800">Secure OAuth</div>
-                  <div className="text-[9px] text-zinc-400 mt-0.5">Google Verified App</div>
-                </div>
-              </div>
-
-              {/* Trust Badge 2 */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50/70 border border-zinc-200 rounded-xl animate-badge-glow [animation-delay:1.5s] transition-all hover:scale-[1.02] cursor-default">
-                <div className="w-6 h-6 rounded-lg bg-indigo-500/10 grid place-items-center text-indigo-600 shrink-0">
-                  <Cpu size={13} />
-                </div>
-                <div className="leading-none text-left">
-                  <div className="text-[11px] font-bold text-zinc-800">Local Privacy</div>
-                  <div className="text-[9px] text-zinc-400 mt-0.5">Local cache indexing</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Inbox Mockup Simulator */}
-          <div className="flex items-center justify-center relative px-4 sm:px-8">
-            <InboxSimulator />
-          </div>
-
-        </div>
-      </section>
+      <Header />
+      <Hero />
 
       {/* ─── TRUSTED LOGO MARQUEE ─── */}
       <section className="bg-[#fff2e0] border-y border-zinc-150 py-10 overflow-hidden">
@@ -558,8 +397,8 @@ export function NewLanding() {
           </p>
           <div className="relative w-full overflow-hidden">
             {/* Masking shadows left/right */}
-            <div className="absolute left-0 top-0 bottom-0 w-16 bg-linear-to-r from-zinc-50 to-transparent z-10 pointer-events-none" />
-            <div className="absolute right-0 top-0 bottom-0 w-16 bg-linear-to-l from-zinc-50 to-transparent z-10 pointer-events-none" />
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-linear-to-r from-[#fff2e0] to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-linear-to-l from-[#fff2e0] to-transparent z-10 pointer-events-none" />
             
             <div className="flex gap-16 animate-marquee whitespace-nowrap">
               {[...COMPANYS, ...COMPANYS].map((company, i) => (
@@ -1027,74 +866,7 @@ export function NewLanding() {
         </div>
       </section>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t-[3px] border-[#fff2e0] py-4 relative overflow-hidden bg-[#fff2e0]">
-        {/* Red/Blue Divider Line */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-[#e61f2a] via-indigo-500 to-[#e61f2a]" />
-        
-        <div className="max-w-[1280px] mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 py-10 text-xs sm:text-sm text-zinc-500">
-          {/* Logo Column */}
-          <div className="flex flex-col items-start text-left">
-            
-            <Link href="/" className="flex items-center no-underline text-wapi-ink shrink-0 relative mb-4">
-              <Image src="/logo2.svg" alt="Gusion Mail Logo" width="150" height="34" priority />
-              <span className="text-red-600 -top-4.5 relative text-base font-medium -ml-1">Mail</span>
-            </Link>
-            <p className="text-xs text-zinc-500 leading-relaxed font-normal max-w-50">
-              The secure, keyboard-first AI email workspace built for modern professionals.
-            </p>
-          </div>
-
-          {/* Column 2 */}
-          <div className="text-left">
-            <h3 className="font-bold text-zinc-900 mb-3">Integrations</h3>
-            <ul className="flex flex-col gap-2 font-normal text-xs text-zinc-650">
-              <li>Gmail API sync</li>
-              <li>Google Calendar API</li>
-              <li>Workspace Domain delegate</li>
-              <li>OAuth2 Authentication scopes</li>
-            </ul>
-          </div>
-
-          {/* Column 3 */}
-          <div className="text-left">
-            <h3 className="font-bold text-zinc-900 mb-3">Security & Laws</h3>
-            <ul className="flex flex-col gap-2 font-normal text-xs text-zinc-650">
-              <li>100% Mumbai Cloud hosting</li>
-              <li>DPDP Privacy Guard compliant</li>
-              <li>No email storage architecture</li>
-              <li>Local cache DB encryption</li>
-            </ul>
-          </div>
-
-          {/* Column 4 */}
-          <div className="text-left">
-            <h3 className="font-bold text-zinc-900 mb-3">Contact Us</h3>
-            <p className="text-xs leading-normal mb-3 font-normal text-zinc-650">
-              Need custom integrations or corporate team workspace hosting?
-            </p>
-            <button
-              onClick={() => signIn("google")}
-              className="inline-flex items-center gap-1 bg-indigo-500 hover:bg-[#0052cc] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition cursor-pointer"
-            >
-              <span>Book Enterprise Demo</span>
-              <ExternalLink size={10} />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Strip */}
-        <div className="border-t border-zinc-200/50 max-w-[1280px] mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400 font-normal">
-          <span>© {new Date().getFullYear()} Gusion Mail. All rights reserved.</span>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-zinc-600 transition no-underline">Terms</Link>
-            <Link href="/privacy" className="hover:text-zinc-600 transition no-underline">Privacy</Link>
-            <Link href="/privacy#dpdp" className="hover:text-zinc-600 transition no-underline">DPDP</Link>
-            <Link href="/privacy#security" className="hover:text-zinc-600 transition no-underline">Security</Link>
-          </div>
-        </div>
-      </footer>
-
+      <FooterFixed />
     </div>
   );
 }

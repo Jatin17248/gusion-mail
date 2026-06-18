@@ -47,10 +47,10 @@ export default function SignupFormDemo({
   return (
     <div className="md:pt-10 pt-1">
       <h2 className="text-xl font-bold text-white">
-        Request A Callback!
+        Request a Workspace Demo!
       </h2>
       <p className="mt-2 max-w-sm text-sm text-white">
-        One of our expert counselors will be in touch with you shortly.
+        One of our product specialists will be in touch with you shortly.
       </p>
 
       <form className="my-6" onSubmit={handleSubmit}>
@@ -69,7 +69,7 @@ export default function SignupFormDemo({
               required
               value={formData.name}
               onChange={handleChange}
-              className="form-control bg-[#94b3e17d] text-white placeholder:text-white/80"
+              className="form-control bg-[#94b3e17d] dark:bg-[#94b3e17d] text-white dark:text-white placeholder:text-white/80 dark:placeholder:text-white/80 dark:shadow-none"
             />
           </LabelInputContainer>
 
@@ -90,7 +90,7 @@ export default function SignupFormDemo({
               inputMode="email"
               pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
               title="Please enter a valid email address"
-              className="form-control bg-[#94b3e17d] text-white placeholder:text-white/80"
+              className="form-control bg-[#94b3e17d] dark:bg-[#94b3e17d] text-white dark:text-white placeholder:text-white/80 dark:placeholder:text-white/80 dark:shadow-none"
             />
           </LabelInputContainer>
 
@@ -108,7 +108,7 @@ export default function SignupFormDemo({
               value={formData.mobile}
               onChange={handleChange}
               maxLength={10}
-              className="form-control bg-[#94b3e17d] text-white placeholder:text-white/80"
+              className="form-control bg-[#94b3e17d] dark:bg-[#94b3e17d] text-white dark:text-white placeholder:text-white/80 dark:placeholder:text-white/80 dark:shadow-none"
             />
           </LabelInputContainer>
         </div>

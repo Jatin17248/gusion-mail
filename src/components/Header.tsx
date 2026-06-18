@@ -273,7 +273,7 @@ export function Header() {
             {/* <ThemeToggle /> */}
 
             {/* Modal Trigger */}
-            <ModalTrigger className="bg-indigo-500 dark:bg-white dark:text-black text-white flex justify-center group/modal-btn">
+            <ModalTrigger className="bg-[#0067ff] hover:bg-blue-600 !text-white flex justify-center group/modal-btn rounded-md border-none cursor-pointer">
               <span className="group-hover/modal-btn:translate-x-40 text-center transition duration-500">
                 Book a call
               </span>
@@ -282,7 +282,7 @@ export function Header() {
               </div>
             </ModalTrigger>
 
-            <button onClick={() => router.push('/register')} className="bg-[#e61f2a] dark:bg-white   !text-white flex justify-center group/modal-btn px-4 py-2 rounded-md dark:!text-black  text-center relative overflow-hidden ">
+            <button onClick={() => router.push('/register')} className="bg-[#e61f2a] hover:bg-red-600 !text-white flex justify-center group/modal-btn px-4 py-2 rounded-md text-center relative overflow-hidden cursor-pointer border-none">
               <span className="group-hover/modal-btn:translate-x-40 text-center transition duration-500">
                 Register Now!
               </span>
@@ -320,7 +320,7 @@ export function Header() {
 
             <div className="mt-4 flex w-full flex-col gap-4">
               <ModalTrigger
-                className="bg-indigo-500 text-white flex justify-center group/modal-btn
+                className="bg-[#0067ff] text-white flex justify-center group/modal-btn
                   px-4 py-2 text-center relative overflow-hidden no-underline space-x-2 cursor-pointer transition duration-200 h-14 hover:shadow-2xl rounded-2xl font-semibold w-full"
               >
                 <span className="group-hover/modal-btn:translate-x-125 text-center flex justify-center items-center transition duration-500  ">

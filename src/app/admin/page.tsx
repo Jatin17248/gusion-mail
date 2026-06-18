@@ -26,7 +26,7 @@ export default function AdminDashboardPage() {
   const updateConfig = api.admin.updateSystemConfig.useMutation({
     onSuccess: () => {
       toast.success("System configuration updated successfully.");
-      refetchConfigs();
+      void refetchConfigs();
     },
     onError: (err) => {
       toast.error(err.message || "Failed to update configuration.");
@@ -51,9 +51,9 @@ export default function AdminDashboardPage() {
   }
 
   // Configurations (default to false if not set in DB)
-  const isMaintenanceMode = configs?.["maintenanceMode"] === true;
-  const isDisableApi = configs?.["disableApi"] === true;
-  const isDisableBulkSend = configs?.["disableBulkSend"] === true;
+  const isMaintenanceMode = configs?.maintenanceMode === true;
+  const isDisableApi = configs?.disableApi === true;
+  const isDisableBulkSend = configs?.disableBulkSend === true;
 
   return (
     <div className="p-8 space-y-8">
@@ -67,8 +67,8 @@ export default function AdminDashboardPage() {
         </div>
         <Button
           onClick={() => {
-            refetchMetrics();
-            refetchConfigs();
+            void refetchMetrics();
+            void refetchConfigs();
             toast.success("Metrics updated.");
           }}
           variant="outline"

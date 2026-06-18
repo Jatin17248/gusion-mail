@@ -140,11 +140,11 @@ export default function ModalBody1() {
     <ModalBody>
       <ModalContent>
         <h4 className="text-lg md:text-2xl  text-white font-bold text-center mb-4">
-          Reviews that create{" "}
-          <span className="px-1 py-0.5 rounded-md bg-white text-[#004ab9] border border-gray-200">
-            Growth!
+          Manage emails with{" "}
+          <span className="px-1 py-0.5 rounded-md bg-white text-[#0067ff] border border-gray-200">
+            Speed!
           </span>
-          {" "} in your Business
+          {" "} on Gusion Mail
         </h4>
         <div className="flex justify-center items-center max-[400px]:hidden">
           {images.map((image, idx) => (

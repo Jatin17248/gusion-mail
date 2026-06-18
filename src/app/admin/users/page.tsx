@@ -44,8 +44,8 @@ export default function AdminUsersPage() {
   const toggleStaff = api.admin.toggleUserStaff.useMutation({
     onSuccess: () => {
       toast.success("Staff privilege updated.");
-      refetchList();
-      refetchDetails();
+      void refetchList();
+      void refetchDetails();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -53,8 +53,8 @@ export default function AdminUsersPage() {
   const toggleSuspension = api.admin.toggleUserSuspension.useMutation({
     onSuccess: () => {
       toast.success("Suspension status updated.");
-      refetchList();
-      refetchDetails();
+      void refetchList();
+      void refetchDetails();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -62,8 +62,8 @@ export default function AdminUsersPage() {
   const resetTrial = api.admin.resetUserTrial.useMutation({
     onSuccess: () => {
       toast.success("14-day trial timer has been reset.");
-      refetchList();
-      refetchDetails();
+      void refetchList();
+      void refetchDetails();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -71,8 +71,8 @@ export default function AdminUsersPage() {
   const disconnectGoogle = api.admin.disconnectGmail.useMutation({
     onSuccess: () => {
       toast.success("Google integration revoked.");
-      refetchList();
-      refetchDetails();
+      void refetchList();
+      void refetchDetails();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -80,7 +80,7 @@ export default function AdminUsersPage() {
   const updateSub = api.admin.updateUserSubscription.useMutation({
     onSuccess: () => {
       toast.success("Subscription entitlements updated.");
-      refetchDetails();
+      void refetchDetails();
     },
     onError: (err) => toast.error(err.message),
   });
