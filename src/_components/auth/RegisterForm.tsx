@@ -58,11 +58,30 @@ const RegisterForm = () => {
         return;
       }
 
-      const result = await res.json();
+      await res.json();
 
-      // Show success message and redirect to login
-      alert("Registration successful! Please check your email to verify your account before logging in.");
-      router.push("/login");
+      // Auto sign-in after successful registration
+      const signInResult = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+
+      if (signInResult?.ok) {
+        try {
+          const statusResponse = await fetch("/api/user/status");
+          const statusData = await statusResponse.json();
+          if (statusData.onboardingCompleted) {
+            router.push("/");
+          } else {
+            router.push("/register/onboarding");
+          }
+        } catch {
+          router.push("/");
+        }
+      } else {
+        router.push("/login");
+      }
     } catch {
       setServerError("Network error. Please try again.");
     } finally {

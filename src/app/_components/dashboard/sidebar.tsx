@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import {
   Mail,
   CalendarIcon,
@@ -7,8 +10,11 @@ import {
   Settings,
   Clock,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
+import Image from "next/image";
 
 interface SidebarProps {
   activeTab: "tickets" | "gmail" | "calendar" | "bulk" | "settings";
@@ -27,15 +33,49 @@ export function Sidebar({
   session,
   trialDaysRemaining,
 }: SidebarProps) {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const isLight = !document.documentElement.classList.contains("dark");
+    setTheme(isLight ? "light" : "dark");
+  }, []);
+
+  const toggleTheme = () => {
+    if (theme === "dark") {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+      setTheme("light");
+    } else {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+      setTheme("dark");
+    }
+  };
   return (
     <aside className="w-64 shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
       <div className="space-y-6">
         {/* Logo */}
         <div className="flex items-center gap-2 px-2">
-          <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
+          {/* <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
             G
           </div>
-          <span className="font-bold text-md tracking-tight text-zinc-100">Gusion Mail</span>
+          <span className="font-bold text-md tracking-tight text-zinc-100">Gusion Mail</span> */}
+
+            <Image 
+            src="/images/logoWhite.svg"
+            alt="Gusion Mail"
+            className="hidden dark:block h-13 w-48"
+
+            width={32} height={32} />
+             <Image 
+            src="/images/logodark.svg"
+            alt="Gusion Mail"
+                        className="dark:hidden block h-13 w-48"
+
+            width={32} height={32} />
+
         </div>
 
         {/* Navigation Links */}
@@ -148,13 +188,24 @@ export function Sidebar({
             )}
             <span className="text-xs font-medium text-zinc-300 truncate">{session?.user?.name}</span>
           </div>
-          <button
-            onClick={() => signOut()}
-            title="Sign Out"
-            className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            {mounted && (
+              <button
+                onClick={toggleTheme}
+                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                className="p-1.5 text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition cursor-pointer"
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+            )}
+            <button
+              onClick={() => signOut()}
+              title="Sign Out"
+              className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

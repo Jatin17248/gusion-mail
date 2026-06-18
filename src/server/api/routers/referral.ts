@@ -4,6 +4,7 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { db } from "@/server/db";
 import { referrals, users } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
+import { sendReferralInviteEmail } from "@/server/lib/email-service";
 
 export const referralRouter = createTRPCRouter({
   getReferralStats: protectedProcedure.query(async ({ ctx }) => {
@@ -77,6 +78,12 @@ export const referralRouter = createTRPCRouter({
           status: "pending",
         })
         .returning();
+
+      await sendReferralInviteEmail(
+        referredEmailClean,
+        user.name ?? user.email ?? "Someone",
+        user.referralCode ?? "GUSION",
+      );
 
       return newReferral;
     }),

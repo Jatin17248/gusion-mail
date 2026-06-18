@@ -3,8 +3,9 @@ import GoogleProvider from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/server/db";
 import { users, accounts, sessions, verificationTokens } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { env } from "@/env";
+import { provisionCorsairTenant } from "@/server/lib/corsair-setup";
 
 declare module "next-auth" {
   interface Session {
@@ -79,7 +80,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.gmailConnected = dbUser.gmailConnected ?? false;
         token.calendarConnected = dbUser.calendarConnected ?? false;
       }
-      
+
       if (token.id) {
         const dbUser = await db.query.users.findFirst({
           where: eq(users.id, token.id as string)
@@ -127,6 +128,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           trialStartedAt,
         })
         .where(eq(users.id, user.id));
+    },
+
+    async signIn({ user, account }) {
+      // DrizzleAdapter only calls linkAccount on first sign-in — subsequent Google
+      // sign-ins do NOT update the accounts table. We manually refresh the tokens
+      // here so refreshCorsairTokens always reads a valid access_token/refresh_token.
+      if (account?.provider === "google" && user.id && account.access_token) {
+        try {
+          await db
+            .update(accounts)
+            .set({
+              access_token: account.access_token,
+              refresh_token: account.refresh_token ?? undefined,
+              expires_at: account.expires_at ?? undefined,
+              token_type: account.token_type ?? undefined,
+              scope: account.scope ?? undefined,
+            })
+            .where(
+              and(
+                eq(accounts.userId, user.id),
+                eq(accounts.provider, "google"),
+              ),
+            );
+
+          // Re-provision Corsair with the fresh tokens so the inbox works immediately
+          // after reconnecting without needing a manual sync click.
+          const dbUser = await db.query.users.findFirst({
+            where: eq(users.id, user.id),
+          });
+          if (dbUser?.corsairTenantId) {
+            await provisionCorsairTenant(user.id, dbUser.corsairTenantId, env.CORSAIR_KEK);
+          }
+        } catch (err) {
+          // Non-fatal — log server-side but don't block sign-in
+          console.error("[auth] Failed to refresh Corsair tokens on sign-in:", err);
+        }
+      }
     },
   },
 });

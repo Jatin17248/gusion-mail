@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useState, useMemo, useEffect, useRef, useEffectEvent } from "react";
+import { signOut, signIn, useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import DOMPurify from "isomorphic-dompurify";
@@ -42,27 +42,6 @@ export function parseEmailAddress(headerValue: string) {
 export function formatSender(headerValue: string) {
   const { name, email } = parseEmailAddress(headerValue);
   return name || email.split("@")[0] || headerValue;
-}
-
-export function formatEventWhen(start: { dateTime?: string; date?: string }, end: { dateTime?: string; date?: string }) {
-  if (!start) return "";
-  if (start.date) {
-    return new Date(start.date).toLocaleDateString();
-  }
-  if (start.dateTime && end.dateTime) {
-    const s = new Date(start.dateTime);
-    const e = new Date(end.dateTime);
-    const isSameDay = s.toDateString() === e.toDateString();
-    const timeStr = `${s.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} - ${e.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-    return isSameDay ? `${s.toLocaleDateString()} ${timeStr}` : `${s.toLocaleDateString()} - ${e.toLocaleDateString()}`;
-  }
-  return "";
-}
-
-export function formatAttendees(attendees?: { email: string; responseStatus?: string }[]) {
-  if (!attendees || attendees.length === 0) return "No attendees";
-  const accepted = attendees.filter(a => a.responseStatus === "accepted").length;
-  return `${attendees.length} attendee${attendees.length > 1 ? "s" : ""} (${accepted} accepted)`;
 }
 
 import {
@@ -246,7 +225,7 @@ export function Dashboard() {
   // Gmail queries/mutations
   const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
     { query: debouncedSearch, limit: 30, tab: inboxTab },
-    { enabled: activeTab === "gmail" }
+    { enabled: activeTab === "gmail", retry: false }
   );
 
   const { data: selectedMessage, isLoading: messageLoading } = api.gmail.getMessage.useQuery(
@@ -257,11 +236,28 @@ export function Dashboard() {
 
   const refreshInbox = api.gmail.refreshInbox.useMutation({
     onSuccess: (res) => {
-      toast.success(`Synced ${res.synced} threads.`);
+      if (res.synced > 0) toast.success(`Synced ${res.synced} emails.`);
       void utils.gmail.searchEmails.invalidate();
     },
-    onError: () => toast.error("Sync failed."),
+    onError: (err) => {
+      if (err.data?.code === "UNAUTHORIZED") {
+        setGmailAuthError(true);
+      } else {
+        toast.error("Sync failed.");
+      }
+    },
   });
+
+  const [gmailAuthError, setGmailAuthError] = useState(false);
+
+  // Auto-sync once on first load when inbox is empty
+  const hasAutoSynced = useRef(false);
+  useEffect(() => {
+    if (!emailsLoading && emails !== undefined && emails.length === 0 && !hasAutoSynced.current) {
+      hasAutoSynced.current = true;
+      refreshInbox.mutate();
+    }
+  }, [emailsLoading, emails]);
 
   const sendEmail = api.gmail.sendEmail.useMutation({
     onSuccess: () => {
@@ -351,7 +347,8 @@ export function Dashboard() {
 
   const generateAiDraft = api.ai.aiCompose.useMutation({
     onSuccess: (res) => {
-      setComposeBody(res.text);
+      setComposeBody(res.body);
+      if (res.subject) setComposeSubject(res.subject);
       setAiComposePrompt("");
       toast.success("AI draft generated!");
     },
@@ -459,13 +456,13 @@ export function Dashboard() {
     };
   }, [weekOffset]);
 
-  const { data: events, isLoading: eventsLoading } = api.calendar.searchEvents.useQuery(
+  const { data: events, isLoading: eventsLoading, isFetching: eventsFetching, error: eventsError } = api.calendar.searchEvents.useQuery(
     {
-      query: debouncedSearch,
+      query: "",
       weekStart: weekRange.start,
       weekEnd: weekRange.end,
     },
-    { enabled: activeTab === "calendar" }
+    { enabled: activeTab === "calendar", retry: false }
   );
 
   const refreshEvents = api.calendar.refreshEvents.useMutation({
@@ -473,7 +470,7 @@ export function Dashboard() {
       toast.success(`Synced ${res.synced} events.`);
       void utils.calendar.searchEvents.invalidate();
     },
-    onError: () => toast.error("Sync failed."),
+    onError: (err) => toast.error(err.message || "Sync failed."),
   });
 
   const sendInvite = api.calendar.sendInvite.useMutation({
@@ -498,6 +495,24 @@ export function Dashboard() {
     },
     onError: (err) => toast.error(err.message || "Failed to delete event."),
   });
+
+  const syncedCalendarWeeks = useRef(new Set<string>());
+  const triggerCalendarSync = useEffectEvent((range: { weekStart: string; weekEnd: string }) => {
+    refreshEvents.mutate(range);
+  });
+
+  useEffect(() => {
+    if (activeTab !== "calendar") return;
+
+    const weekKey = `${weekRange.start}:${weekRange.end}`;
+    if (syncedCalendarWeeks.current.has(weekKey)) return;
+
+    syncedCalendarWeeks.current.add(weekKey);
+    triggerCalendarSync({
+      weekStart: weekRange.start,
+      weekEnd: weekRange.end,
+    });
+  }, [activeTab, triggerCalendarSync, weekRange.end, weekRange.start]);
 
   // Keyboard Navigation Focus State
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -613,7 +628,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-50 overflow-hidden font-sans">
+    <div className="dashboard-root flex h-screen bg-zinc-950 text-zinc-50 overflow-hidden font-sans">
       {/* 1st Pane: Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -647,6 +662,8 @@ export function Dashboard() {
               toggleEmailSelection={toggleEmailSelection}
               clearSelection={clearSelection}
               LoaderIcon={Loader2}
+              gmailAuthError={gmailAuthError}
+              onReconnect={() => signIn("google", { callbackUrl: "/" })}
             />
 
             {/* 3rd Pane: Reading Pane */}
@@ -679,6 +696,9 @@ export function Dashboard() {
             weekRange={weekRange}
             setCreateEventOpen={setCreateEventOpen}
             eventsLoading={eventsLoading}
+            eventsFetching={eventsFetching}
+            calendarError={eventsError ?? refreshEvents.error}
+            onReconnect={() => signIn("google", { callbackUrl: "/" })}
             LoaderIcon={LoaderIcon}
             events={events ?? []}
             deleteEvent={deleteEvent}
@@ -717,7 +737,7 @@ export function Dashboard() {
               <X size={18} />
             </button>
             <h3 className="text-md font-bold text-white mb-4">Keyboard Shortcuts</h3>
-            <div className="space-y-3 max-h-75 overflow-y-auto">
+            <div className="space-y-3 max-h-75 overflow-y-auto custom-scrollbar pr-1">
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Move list focus down</span>
                 <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">j</kbd>
@@ -2058,4 +2078,3 @@ function SettingsView() {
 function LoaderIcon() {
   return <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />;
 }
-

@@ -128,7 +128,7 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: #09090b;
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -159,6 +159,40 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Global modern scrollbar — applies to every scrollable element */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Light theme override */
+:root:not(.dark) * {
+  scrollbar-color: rgba(0, 0, 0, 0.16) transparent;
+}
+:root:not(.dark) *::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.16);
+}
+:root:not(.dark) *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.30);
+}
+
 /* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -168,11 +202,176 @@ html {
   scrollbar-width: none;
 }
 
+/* Modern thin scrollbar — dark theme */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Light theme override */
+:root:not(.dark) .custom-scrollbar {
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+}
+:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.32);
+}
+
 /* Custom background image utility for auth pages to work around Tailwind v4 unquoted URL parser quirks */
 .auth-banner-bg {
   background-image: url('/images/login-banner-bg.jpg'), linear-gradient(275deg, rgb(205, 214, 229) 0%, rgb(211, 246, 242) 100%);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
+}
+
+/* Light Mode overrides for the Dashboard */
+html:not(.dark) {
+  body {
+    background-color: oklch(0.985 0 0) !important;
+  }
+
+  .dashboard-root {
+    background-color: oklch(0.985 0 0) !important;
+    color: #012b57 !important;
+  }
+
+  /* Map bg-zinc-950 to light background */
+  .dashboard-root .bg-zinc-950,
+  .dashboard-root .bg-zinc-950\/80,
+  .dashboard-root section.bg-zinc-950 {
+    background-color: oklch(0.985 0 0) !important;
+  }
+
+  /* Map bg-zinc-900 to white card/panel background */
+  .dashboard-root .bg-zinc-900,
+  .dashboard-root .bg-zinc-900\/30 {
+    background-color: oklch(1 0 0) !important;
+  }
+
+  /* Translucent/opacity backgrounds */
+  .dashboard-root .bg-zinc-900\/5 {
+    background-color: rgba(9, 9, 11, 0.03) !important;
+  }
+  .dashboard-root .bg-zinc-900\/10 {
+    background-color: rgba(9, 9, 11, 0.04) !important;
+  }
+  .dashboard-root .bg-zinc-900\/20 {
+    background-color: rgba(9, 9, 11, 0.06) !important;
+  }
+  .dashboard-root .bg-zinc-950\/20 {
+    background-color: rgba(9, 9, 11, 0.04) !important;
+  }
+  .dashboard-root .bg-zinc-950\/40 {
+    background-color: rgba(9, 9, 11, 0.07) !important;
+  }
+  .dashboard-root .bg-zinc-950\/60 {
+    background-color: rgba(9, 9, 11, 0.25) !important; /* modal backdrop */
+  }
+  .dashboard-root .bg-zinc-950\/95 {
+    background-color: rgba(255, 255, 255, 0.98) !important; /* dropdowns */
+  }
+  .dashboard-root .bg-zinc-850 {
+    background-color: oklch(0.95 0 0) !important;
+  }
+
+  /* Text overrides */
+  .dashboard-root .text-zinc-50,
+  .dashboard-root .text-zinc-100,
+  .dashboard-root .text-zinc-200,
+  .dashboard-root .text-zinc-350,
+  .dashboard-root .text-zinc-300,
+  .dashboard-root .text-zinc-250,
+  .dashboard-root h2.text-white,
+  .dashboard-root h3.text-white,
+  .dashboard-root h4.text-white {
+    color: #012b57 !important;
+  }
+  
+  .dashboard-root .text-zinc-400 {
+    color: oklch(0.45 0 0) !important;
+  }
+  
+  .dashboard-root .text-zinc-500 {
+    color: oklch(0.55 0 0) !important;
+  }
+
+  /* Border overrides */
+  .dashboard-root .border-zinc-900,
+  .dashboard-root .border-zinc-800,
+  .dashboard-root .border-zinc-850,
+  .dashboard-root .border-zinc-700,
+  .dashboard-root .border-indigo-500\/10,
+  .dashboard-root .border-indigo-500\/20,
+  .dashboard-root .divide-zinc-900\/50 > *,
+  .dashboard-root .divide-zinc-800 > * {
+    border-color: oklch(0.922 0 0) !important;
+  }
+  
+  /* Input fields */
+  .dashboard-root input,
+  .dashboard-root textarea,
+  .dashboard-root select {
+    &.bg-zinc-950, &.bg-zinc-900 {
+      background-color: oklch(1 0 0) !important;
+      color: #012b57 !important;
+      border-color: oklch(0.88 0 0) !important;
+    }
+    &::placeholder {
+      color: oklch(0.55 0 0) !important;
+    }
+  }
+
+  /* Sidebar styling */
+  .dashboard-root aside {
+    background-color: oklch(0.97 0 0) !important;
+    border-right-color: oklch(0.922 0 0) !important;
+  }
+
+  /* Keyboard shortcut tags */
+  .dashboard-root kbd {
+    background-color: oklch(0.95 0 0) !important;
+    color: oklch(0.35 0 0) !important;
+    border-color: oklch(0.88 0 0) !important;
+  }
+
+  /* Hover and active states */
+  .dashboard-root .hover\:bg-zinc-900:hover,
+  .dashboard-root .hover\:bg-zinc-800:hover,
+  .dashboard-root .hover\:bg-zinc-900\/50:hover {
+    background-color: oklch(0.94 0 0) !important;
+  }
+
+  .dashboard-root .hover\:text-zinc-200:hover {
+    color: #000000 !important;
+  }
+
+  /* Inbox list items selected/focused states */
+  .dashboard-root .bg-indigo-500\/5 {
+    background-color: rgba(99, 102, 241, 0.08) !important; /* light indigo background for selected email */
+  }
+  .dashboard-root .bg-indigo-500\/10 {
+    background-color: rgba(99, 102, 241, 0.12) !important;
+  }
+  
+  /* Badges */
+  .dashboard-root .bg-zinc-800 {
+    background-color: oklch(0.92 0 0) !important;
+  }
 }
 

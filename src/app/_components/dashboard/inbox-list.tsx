@@ -1,4 +1,4 @@
-import { Search, Plus, RefreshCw, Star } from "lucide-react";
+import { Search, Plus, RefreshCw, Star, WifiOff } from "lucide-react";
 import { formatMessageDate, parseEmailAddress } from "@/app/_components/dashboard";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ interface InboxListProps {
   toggleEmailSelection: (id: string) => void;
   clearSelection: () => void;
   LoaderIcon: React.FC;
+  gmailAuthError?: boolean;
+  onReconnect?: () => void;
 }
 
 export function InboxList({
@@ -44,6 +46,8 @@ export function InboxList({
   toggleEmailSelection,
   clearSelection,
   LoaderIcon,
+  gmailAuthError,
+  onReconnect,
 }: InboxListProps) {
   const utils = api.useUtils();
   const createSavedSearch = api.search.createSavedSearch.useMutation({
@@ -185,6 +189,17 @@ export function InboxList({
           <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-2">
             <LoaderIcon />
             <span className="text-xs">Loading inbox...</span>
+          </div>
+        ) : gmailAuthError ? (
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-3 px-6 text-center">
+            <WifiOff size={20} className="text-zinc-600" />
+            <span className="text-xs text-zinc-400">Google account disconnected.</span>
+            <button
+              onClick={onReconnect}
+              className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer"
+            >
+              Reconnect Google
+            </button>
           </div>
         ) : !emails || emails.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-zinc-500">

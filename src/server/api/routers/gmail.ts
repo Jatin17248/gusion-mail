@@ -6,6 +6,8 @@ import {
   getHeader,
 } from "@/server/lib/email";
 import { getTenant } from "@/server/lib/tenant";
+import { refreshCorsairTokens } from "@/server/lib/corsair-setup";
+import { env } from "@/env";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   dedupeByEntityId,
@@ -90,73 +92,86 @@ export const gmailRouter = createTRPCRouter({
         if (cached) return cached;
       }
 
-      const tenant = getTenant(ctx.session.user.corsairTenantId);
+      let tenant;
+      try {
+        tenant = getTenant(ctx.session.user.corsairTenantId);
+      } catch {
+        // No Corsair tenant yet — return empty inbox rather than throwing
+        return [];
+      }
+
       let result: MappedMessage[] = [];
 
-      if (isQueryEmpty) {
-        if (input.tab === "all") {
-          const messages = await tenant.gmail.db.messages.list({
-            limit: input.limit,
-            offset: input.offset,
-          });
-          result = sortMessagesNewestFirst(
-            dedupeByEntityId(messages).map(mapMessage),
-          );
-        } else {
-          let whereClause;
-          if (input.tab === "important") {
-            whereClause = and(
-              eq(emailMeta.userId, ctx.session.user.id),
-              or(
-                inArray(emailMeta.priority, ["urgent", "high"]),
-                eq(emailMeta.category, "important")
-              )
-            );
-          } else if (input.tab === "other") {
-            whereClause = and(
-              eq(emailMeta.userId, ctx.session.user.id),
-              or(
-                inArray(emailMeta.priority, ["normal", "low"]),
-                eq(emailMeta.category, "other")
-              ),
-              ne(emailMeta.isVipSender, true)
+      try {
+        if (isQueryEmpty) {
+          if (input.tab === "all") {
+            const messages = await tenant.gmail.db.messages.list({
+              limit: input.limit,
+              offset: input.offset,
+            });
+            result = sortMessagesNewestFirst(
+              dedupeByEntityId(messages).map(mapMessage),
             );
           } else {
-            // vip
-            whereClause = and(
-              eq(emailMeta.userId, ctx.session.user.id),
-              eq(emailMeta.isVipSender, true)
+            let whereClause;
+            if (input.tab === "important") {
+              whereClause = and(
+                eq(emailMeta.userId, ctx.session.user.id),
+                or(
+                  inArray(emailMeta.priority, ["urgent", "high"]),
+                  eq(emailMeta.category, "important")
+                )
+              );
+            } else if (input.tab === "other") {
+              whereClause = and(
+                eq(emailMeta.userId, ctx.session.user.id),
+                or(
+                  inArray(emailMeta.priority, ["normal", "low"]),
+                  eq(emailMeta.category, "other")
+                ),
+                ne(emailMeta.isVipSender, true)
+              );
+            } else {
+              // vip
+              whereClause = and(
+                eq(emailMeta.userId, ctx.session.user.id),
+                eq(emailMeta.isVipSender, true)
+              );
+            }
+
+            const metas = await db.query.emailMeta.findMany({
+              where: whereClause,
+              orderBy: [desc(emailMeta.createdAt)],
+              limit: input.limit,
+              offset: input.offset,
+            });
+
+            if (metas.length === 0) {
+              return [];
+            }
+
+            const messageIds = metas.map((m) => m.gmailMessageId);
+            const messages = await tenant.gmail.db.messages.findManyByEntityIds(messageIds);
+            result = sortMessagesNewestFirst(
+              dedupeByEntityId(messages).map(mapMessage),
             );
           }
-
-          const metas = await db.query.emailMeta.findMany({
-            where: whereClause,
-            orderBy: [desc(emailMeta.createdAt)],
+        } else {
+          const messages = await tenant.gmail.db.messages.search({
+            data: {
+              snippet: { contains: input.query },
+            },
             limit: input.limit,
             offset: input.offset,
           });
-
-          if (metas.length === 0) {
-            return [];
-          }
-
-          const messageIds = metas.map((m) => m.gmailMessageId);
-          const messages = await tenant.gmail.db.messages.findManyByEntityIds(messageIds);
           result = sortMessagesNewestFirst(
             dedupeByEntityId(messages).map(mapMessage),
           );
         }
-      } else {
-        const messages = await tenant.gmail.db.messages.search({
-          data: {
-            snippet: { contains: input.query },
-          },
-          limit: input.limit,
-          offset: input.offset,
-        });
-        result = sortMessagesNewestFirst(
-          dedupeByEntityId(messages).map(mapMessage),
-        );
+      } catch (err) {
+        // Entity cache unavailable (Corsair account not provisioned yet, DB cold start, etc.)
+        console.error("[searchEmails] entity cache error:", err);
+        return [];
       }
 
       // Join emailMeta
@@ -294,25 +309,114 @@ export const gmailRouter = createTRPCRouter({
   refreshInbox: protectedProcedure.mutation(async ({ ctx }) => {
     const tenant = getTenant(ctx.session.user.corsairTenantId);
     try {
-      const result = await tenant.gmail.api.threads.list({ maxResults: 50 });
-      // Invalidate inbox cache
-      const cacheKey = `gmail:inbox:${ctx.session.user.id}:${50}:${0}`;
-      await redis.del(cacheKey);
-
-      return {
-        synced: result.threads?.length ?? 0,
-      };
-    } catch (error: unknown) {
-      if (error && typeof error === "object" && "status" in error) {
-        const status = (error as { status: number }).status;
-        if (status === 401 || status === 403) {
+      // Always push the latest OAuth tokens from NextAuth's accounts table into
+      // Corsair's key manager. Access tokens expire in 1h; without this step,
+      // syncs silently return 0 once the token provisioned at sign-up goes stale.
+      if (ctx.session.user.corsairTenantId) {
+        const hasOAuth = await refreshCorsairTokens(
+          ctx.session.user.id,
+          ctx.session.user.corsairTenantId,
+          env.CORSAIR_KEK,
+        );
+        if (!hasOAuth) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: "Google account connection is invalid. Please reconnect.",
           });
         }
       }
-      throw error;
+
+      // Fetch recent message IDs from Gmail inbox
+      const listResult = await tenant.gmail.api.messages.list({
+        maxResults: 50,
+        labelIds: ["INBOX"],
+      });
+      const msgList = (listResult.messages ?? []).slice(0, 30) as { id?: string }[];
+
+      // Fetch metadata for each message and upsert into the Corsair entity cache.
+      // Auth errors from individual .get() calls are re-thrown so the outer catch
+      // can surface them — only transient per-message failures are skipped.
+      let synced = 0;
+      for (const msg of msgList) {
+        if (!msg.id) continue;
+        try {
+          const full = await tenant.gmail.api.messages.get({
+            id: msg.id,
+            format: "metadata",
+            metadataHeaders: ["Subject", "From", "To"],
+          });
+          const headers = (full as { payload?: { headers?: { name: string; value: string }[] } }).payload?.headers;
+          await (tenant.gmail.db.messages as unknown as { upsertByEntityId: (id: string, data: Record<string, unknown>) => Promise<unknown> }).upsertByEntityId(msg.id, {
+            id: msg.id,
+            threadId: (full as { threadId?: string }).threadId ?? undefined,
+            snippet: (full as { snippet?: string }).snippet ?? undefined,
+            labelIds: (full as { labelIds?: string[] }).labelIds ?? undefined,
+            internalDate: (full as { internalDate?: string | number }).internalDate != null
+              ? String((full as { internalDate?: string | number }).internalDate)
+              : undefined,
+            subject: getHeader(headers, "Subject") || undefined,
+            from: getHeader(headers, "From") || undefined,
+            to: getHeader(headers, "To") || undefined,
+          });
+          synced++;
+        } catch (msgErr: unknown) {
+          // Re-throw auth errors so the outer catch handles them properly
+          const errCode = msgErr && typeof msgErr === "object" && "code" in msgErr
+            ? (msgErr as { code: number }).code : null;
+          if (errCode === 401 || errCode === 403) throw msgErr;
+          const errStatus = msgErr && typeof msgErr === "object" && "status" in msgErr
+            ? (msgErr as { status: number }).status : null;
+          if (errStatus === 401 || errStatus === 403) throw msgErr;
+          // Non-auth per-message failures: skip and continue
+        }
+      }
+
+      // Invalidate all inbox cache entries for this user (cover common limit values)
+      const tabs = ["important", "other", "vip", "all"];
+      const limits = [30, 50, 100];
+      const cachePatterns = tabs.flatMap((tab) =>
+        limits.map((limit) => `gmail:inbox:${ctx.session.user.id}:${tab}:${limit}:0`)
+      );
+      await Promise.all(cachePatterns.map((k) => redis.del(k)));
+
+      return { synced };
+    } catch (error: unknown) {
+      // GmailAPIError uses `code` (not `status`)
+      if (error && typeof error === "object" && "code" in error) {
+        const code = (error as { code: number }).code;
+        if (code === 401 || code === 403) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
+        }
+      }
+      // Fallback for HTTP errors that expose `status`
+      if (error && typeof error === "object" && "status" in error) {
+        const status = (error as { status: number }).status;
+        if (status === 401 || status === 403) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
+        }
+      }
+      // Re-throw TRPC errors as-is (e.g. the hasOAuth check above)
+      if (error instanceof TRPCError) throw error;
+      // Corsair keyBuilder auth failures, missing account/integration records, and
+      // DEK decryption failures (CORSAIR_KEK mismatch → "Invalid encrypted data format")
+      const msg = error instanceof Error ? error.message : String(error);
+      if (
+        msg.includes("[corsair:gmail]") ||
+        msg.includes("[auth-missing:") ||
+        msg.includes("refresh_token") ||
+        msg.includes("refresh token") ||
+        msg.includes("Account not found for tenant") ||
+        msg.includes("Invalid encrypted data format") ||
+        msg.includes("encrypted data") ||
+        msg.includes("unable to authenticate") ||
+        msg.includes("Unsupported state") ||
+        (msg.includes("Integration") && msg.includes("not found"))
+      ) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
+      }
+      // Transient/non-auth errors (rate limit, network, etc.) — log and return gracefully
+      console.error("[refreshInbox] unexpected error:", error);
+      return { synced: 0 };
     }
   }),
 
@@ -383,6 +487,9 @@ export const gmailRouter = createTRPCRouter({
         ? `${input.body}\n\n--\nSent with Gusion Mail - https://mail.gusion.in`
         : input.body;
 
+      if (ctx.session.user.corsairTenantId) {
+        await refreshCorsairTokens(ctx.session.user.id, ctx.session.user.corsairTenantId, env.CORSAIR_KEK);
+      }
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       const raw = encodeRawEmail({
         ...input,

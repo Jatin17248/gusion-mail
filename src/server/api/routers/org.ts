@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, orgProcedure, requireOrgRole } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { users, organizations, orgMembers } from "@/server/db/schema";
+import { users, organizations, orgMembers, teamInvitations } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { sendTeamInvitationEmail } from "@/server/lib/email-service";
 
 export const orgRouter = createTRPCRouter({
   getOrg: orgProcedure.query(async ({ ctx }) => {
@@ -60,52 +61,59 @@ export const orgRouter = createTRPCRouter({
     )
     .use(requireOrgRole(["owner", "admin"]))
     .mutation(async ({ ctx, input }) => {
-      // 1. Check if user already exists
-      let user = await db.query.users.findFirst({
-        where: eq(users.email, input.email.toLowerCase()),
+      const emailClean = input.email.toLowerCase().trim();
+
+      // Check if already a member
+      const existingUser = await db.query.users.findFirst({
+        where: eq(users.email, emailClean),
       });
-
-      if (!user) {
-        // Create user placeholder
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            email: input.email.toLowerCase(),
-            name: input.email.split("@")[0],
-          })
-          .returning();
-        if (!newUser) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user." });
-        }
-        user = newUser;
-      }
-
-      // 2. Check if already a member
-      const existing = await db.query.orgMembers.findFirst({
-        where: and(
-          eq(orgMembers.orgId, ctx.org.id),
-          eq(orgMembers.userId, user.id)
-        ),
-      });
-
-      if (existing) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "User is already a member of this organization.",
+      if (existingUser) {
+        const existingMember = await db.query.orgMembers.findFirst({
+          where: and(
+            eq(orgMembers.orgId, ctx.org.id),
+            eq(orgMembers.userId, existingUser.id)
+          ),
         });
+        if (existingMember) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "User is already a member of this organization.",
+          });
+        }
       }
 
-      // 3. Insert into orgMembers
-      const [inserted] = await db
-        .insert(orgMembers)
+      // Invalidate any existing pending invite for this email+org
+      await db
+        .update(teamInvitations)
+        .set({ status: "expired" })
+        .where(
+          and(
+            eq(teamInvitations.orgId, ctx.org.id),
+            eq(teamInvitations.email, emailClean),
+            eq(teamInvitations.status, "pending")
+          )
+        );
+
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const [invitation] = await db
+        .insert(teamInvitations)
         .values({
           orgId: ctx.org.id,
-          userId: user.id,
+          email: emailClean,
           role: input.role,
+          token,
+          invitedByUserId: ctx.session.user.id,
+          status: "pending",
+          expiresAt,
         })
         .returning();
 
-      return inserted;
+      const inviterName = ctx.session.user.name ?? ctx.session.user.email ?? "A team member";
+      await sendTeamInvitationEmail(emailClean, token, ctx.org.name, inviterName);
+
+      return invitation;
     }),
 
   updateMemberRole: orgProcedure

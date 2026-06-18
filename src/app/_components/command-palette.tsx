@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings, Bookmark, Clock } from "lucide-react";
+import { Inbox, Calendar, FileText, HelpCircle, Archive, Eye, Sparkles, Filter, Search, Settings, Bookmark, Clock, X } from "lucide-react";
 import { api } from "@/trpc/react";
 
 interface CommandPaletteProps {
@@ -26,6 +26,10 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
         e.preventDefault();
         setOpen(!open);
       }
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        setOpen(false);
+      }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
@@ -41,8 +45,14 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4 bg-zinc-950/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/90 shadow-2xl backdrop-blur-md">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4 bg-zinc-950/60 backdrop-blur-sm"
+      onClick={() => setOpen(false)}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/90 shadow-2xl backdrop-blur-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Command label="Global Command Menu" className="w-full">
           <div className="flex items-center border-b border-zinc-800 px-3 gap-2">
             <Search className="h-4 w-4 text-zinc-500 shrink-0" />
@@ -60,8 +70,15 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
               placeholder="Search commands or mail (e.g. '/from:john', '/subject:invoice')..."
               className="flex h-12 w-full bg-transparent py-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
             />
+            <button
+              onClick={() => setOpen(false)}
+              className="shrink-0 p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <Command.List className="max-h-[350px] overflow-y-auto p-2">
+          <Command.List className="max-h-[350px] overflow-y-auto p-2 custom-scrollbar">
             <Command.Empty className="py-6 text-center text-sm text-zinc-500">
               No results found. Press <kbd className="px-1.5 py-0.5 bg-zinc-800 text-zinc-300 rounded text-xs">Enter</kbd> to search mail for &ldquo;{value}&rdquo;.
             </Command.Empty>

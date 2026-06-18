@@ -28,6 +28,34 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   }
 }
 
+export async function sendReferralInviteEmail(
+  toEmail: string,
+  referrerName: string,
+  referralCode: string,
+) {
+  const signupLink = `${APP_URL}/register?ref=${referralCode}`;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: `${referrerName} invited you to try Gusion Mail`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>You've been invited!</h2>
+          <p><strong>${referrerName}</strong> thinks you'd love Gusion — the AI email assistant that replies, summarises, and schedules for you.</p>
+          <p>Sign up using the link below and both of you get <strong>30 extra days</strong> on the free trial.</p>
+          <a href="${signupLink}" style="display: inline-block; background-color: #e61f2a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0;">Claim your free trial</a>
+          <p style="color: #888; font-size: 12px;">Sent with Gusion Mail — ${APP_URL}</p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Failed to send referral invite email:", error);
+    throw new Error("Failed to send referral invite email");
+  }
+}
+
 export async function sendTeamInvitationEmail(email: string, token: string, orgName: string, invitedBy: string) {
   const inviteLink = `${APP_URL}/accept-invite?token=${token}`;
 

@@ -86,8 +86,9 @@ describe("AI Features Router", () => {
       styleContext: "formal",
     });
 
-    expect(result.text).toBe("Draft email content");
-    expect(generateText).toHaveBeenCalled();
+    expect(result.body).toBeDefined();
+    expect(result.subject).toBeDefined();
+    expect(generateObject).toHaveBeenCalled();
   });
 
   it("should generate 3 smart replies using aiSmartReply", async () => {

@@ -3,9 +3,12 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { hasActivePlanOrTrial } from "@/server/lib/plan-gate";
 import { trackEvent } from "@/lib/analytics";
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, generateObject } from "ai";
+import { env } from "@/env";
 import { getTenant } from "@/server/lib/tenant";
+
+const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? "" });
 import { db } from "@/server/db";
 import { emailMeta } from "@/server/db/schema";
 import { and, eq, gte, or } from "drizzle-orm";
@@ -33,18 +36,21 @@ export const aiRouter = createTRPCRouter({
       await verifyPremium(ctx.session.user.id);
       trackEvent(ctx.session.user.id, "ai_compose_triggered", { promptLength: input.prompt.length });
 
-      const systemPrompt = `You are an expert AI email writer. Write a clear, concise, and professional email body based on the instructions.
-Do NOT output subject lines, headers, or signatures unless requested. Just write the email body.
+      const systemPrompt = `You are an expert AI email writer. Generate a clear, concise, and professional email based on the instructions.
 ${input.tone ? `Tone: ${input.tone}` : ""}
 ${input.styleContext ? `Writing Style / Context: ${input.styleContext}` : ""}`;
 
-      const { text } = await generateText({
+      const { object } = await generateObject({
         model: google("gemini-2.5-flash"),
+        schema: z.object({
+          subject: z.string().describe("A concise email subject line (no more than 10 words)"),
+          body: z.string().describe("The email body text, no subject line or signature"),
+        }),
         system: systemPrompt,
         prompt: input.prompt,
       });
 
-      return { text };
+      return object;
     }),
 
   aiSmartReply: protectedProcedure

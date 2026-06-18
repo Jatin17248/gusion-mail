@@ -67,9 +67,14 @@ export const billingRouter = createTRPCRouter({
   }),
 
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
-    const sub = await db.query.subscriptions.findFirst({
-      where: eq(subscriptions.userId, ctx.session.user.id),
-    });
+    let sub = null;
+    try {
+      sub = await db.query.subscriptions.findFirst({
+        where: eq(subscriptions.userId, ctx.session.user.id),
+      });
+    } catch {
+      // subscriptions table may not yet have the expected schema — return defaults
+    }
 
     const user = await db.query.users.findFirst({
       where: eq(users.id, ctx.session.user.id),

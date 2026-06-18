@@ -3,7 +3,6 @@ import { TRPCError } from "@trpc/server";
 import { getTenant } from "@/server/lib/tenant";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { dedupeByEntityId } from "@/server/lib/corsair-entities";
-import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
 
 const paginationSchema = z.object({
@@ -98,17 +97,10 @@ export const calendarRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const cacheKey = `calendar:events:${ctx.session.user.id}:${input.weekStart}:${input.weekEnd}`;
-      const isQueryEmpty = !input.query.trim();
-
-      if (isQueryEmpty) {
-        const cached = await redis.get(cacheKey) as MappedEvent[] | null;
-        if (cached) return cached;
-      }
-
       const tenant = getTenant(ctx.session.user.corsairTenantId);
       const weekStart = new Date(input.weekStart);
       const weekEnd = new Date(input.weekEnd);
+      const isQueryEmpty = !input.query.trim();
 
       const events = !isQueryEmpty
         ? await tenant.googlecalendar.db.events.search({
@@ -128,10 +120,6 @@ export const calendarRouter = createTRPCRouter({
         weekStart,
         weekEnd,
       );
-
-      if (isQueryEmpty) {
-        await redis.set(cacheKey, result, { ex: 60 });
-      }
 
       return result;
     }),
@@ -154,10 +142,6 @@ export const calendarRouter = createTRPCRouter({
           singleEvents: true,
           orderBy: "startTime",
         });
-
-        // Invalidate cache
-        const cacheKey = `calendar:events:${ctx.session.user.id}:${input.weekStart}:${input.weekEnd}`;
-        await redis.del(cacheKey);
 
         return {
           synced: result.items?.length ?? 0,
@@ -208,9 +192,6 @@ export const calendarRouter = createTRPCRouter({
         },
       });
 
-      // Invalidate caches
-      await redis.del(`calendar:events:${ctx.session.user.id}`);
-
       return {
         id: event.id ?? "",
         htmlLink: event.htmlLink ?? "",
@@ -247,9 +228,6 @@ export const calendarRouter = createTRPCRouter({
           attendees: input.attendees.map((email) => ({ email })),
         },
       });
-
-      // Invalidate caches
-      await redis.del(`calendar:events:${ctx.session.user.id}`);
 
       return {
         id: event.id ?? "",

@@ -75,8 +75,23 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} antialiased min-h-screen bg-[#09090B]`}>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                if (localStorage.getItem('theme') === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
+      <body className={`${inter.className} antialiased min-h-screen bg-background text-foreground`}>
         <SessionProvider session={session}>
           <TRPCReactProvider>
             {isSuspended ? (
