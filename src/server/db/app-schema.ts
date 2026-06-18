@@ -25,6 +25,9 @@ export const users = pgTable("users", {
   referredByCode: text("referred_by_code"),
   trialStartedAt: timestamp("trial_started_at", { mode: "date" }),
   activeOrgId: text("active_org_id"),
+  passwordHash: text("password_hash"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetTokenExpiry: timestamp("password_reset_token_expiry", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -429,5 +432,21 @@ export const connectedAccounts = pgTable("connected_accounts", {
   provider: text("provider").notNull().default("google"),
   email: text("email").notNull(),
   isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const teamInvitations = pgTable("team_invitations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("member"),
+  token: text("token").notNull().unique(),
+  invitedByUserId: text("invited_by_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'expired'
+  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });

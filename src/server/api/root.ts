@@ -10,6 +10,7 @@ import { schedulingRouter } from "@/server/api/routers/scheduling";
 import { contactsRouter } from "@/server/api/routers/contacts";
 import { referralRouter } from "@/server/api/routers/referral";
 import { orgRouter } from "@/server/api/routers/org";
+import { teamRouter } from "@/server/api/routers/team";
 import { ticketsRouter } from "@/server/api/routers/tickets";
 import { automationRouter } from "@/server/api/routers/automation";
 import { apiKeysRouter } from "@/server/api/routers/apikeys";

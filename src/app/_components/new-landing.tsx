@@ -382,7 +382,7 @@ export function NewLanding() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white text-zinc-800 font-sans antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[#fff2e0] text-zinc-800 font-sans antialiased overflow-x-hidden">
       
       {/* ─── NAVBAR ─── */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 transition-colors">
@@ -473,7 +473,7 @@ export function NewLanding() {
       </header>
 
       {/* ─── HERO SECTION ─── */}
-      <section className="relative px-6 pt-16 pb-20 overflow-hidden bg-white">
+      <section className="relative px-6 pt-16 pb-20 overflow-hidden bg-[#fff2e0]">
         {/* Soft Background Gradients */}
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,#EAF4EE,transparent_45%),radial-gradient(circle_at_20%_80%,#FFF5F5,transparent_45%)] opacity-80" />
 
@@ -551,7 +551,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── TRUSTED LOGO MARQUEE ─── */}
-      <section className="bg-zinc-50 border-y border-zinc-150 py-10 overflow-hidden">
+      <section className="bg-[#fff2e0] border-y border-zinc-150 py-10 overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-[0.15em] mb-5">
             BUILT WITH COMPATIBILITY IN MIND
@@ -576,7 +576,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── STATS STRIP ─── */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-[#fff2e0]">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {STATS.map((stat, i) => (
@@ -631,7 +631,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── BENTO GRID SECTION ─── */}
-      <section id="bento" className="py-20 bg-white border-t border-zinc-100">
+      <section id="bento" className="py-20 bg-[#fff2e0] border-t border-zinc-100">
         <div className="max-w-7xl mx-auto px-6">
           
           <div className="text-center mb-14 max-w-2xl mx-auto">
@@ -720,7 +720,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" className="py-20 bg-zinc-50/50 border-t border-zinc-100">
+      <section id="how-it-works" className="py-20  border-t border-zinc-100">
         <div className="max-w-7xl mx-auto px-6 text-center">
           
           <div className="max-w-2xl mx-auto mb-16">
@@ -776,7 +776,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── COMPARISON CARD ─── */}
-      <section className="py-20 bg-white border-t border-zinc-100">
+      <section className="py-20 bg-[#fff2e0] border-t border-zinc-100">
         <div className="max-w-4xl mx-auto px-6">
           <div className="bg-zinc-950 text-white rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -832,7 +832,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── PRICING PLANS ─── */}
-      <section id="pricing" className="py-20 bg-zinc-50/50 border-t border-zinc-100">
+      <section id="pricing" className="py-20  border-t border-zinc-100">
         <div className="max-w-7xl mx-auto px-6">
           
           <div className="text-center mb-16 max-w-2xl mx-auto">
@@ -950,7 +950,7 @@ export function NewLanding() {
       </section>
 
       {/* ─── FAQ SECTION ─── */}
-      <section id="faq" className="py-20 bg-white border-t border-zinc-100">
+      <section id="faq" className="py-20 bg-[#fff2e0] border-t border-zinc-100">
         <div className="max-w-3xl mx-auto px-6">
           
           <div className="text-center mb-12">

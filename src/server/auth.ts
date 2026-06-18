@@ -17,8 +17,12 @@ declare module "next-auth" {
   }
 }
 
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db),
+  session: { strategy: "jwt" },
   providers: [
     GoogleProvider({
       clientId: env.AUTH_GOOGLE_ID,
@@ -31,15 +35,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
       },
     }),
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Invalid credentials");
+        }
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.email, credentials.email as string)
+        });
+
+        if (!user || !user.passwordHash) {
+          throw new Error("Invalid credentials");
+        }
+
+        const isCorrectPassword = await bcrypt.compare(
+          credentials.password as string,
+          user.passwordHash
+        );
+
+        if (!isCorrectPassword) {
+          throw new Error("Invalid credentials");
+        }
+
+        return user;
+      }
+    })
   ],
   callbacks: {
-    async session({ session, user }) {
-      if (session.user && user) {
+    async jwt({ token, user }) {
+      if (user) {
+        // credentials authorize returns user, Google provider returns user on sign in
         const dbUser = user as typeof users.$inferSelect;
-        session.user.id = dbUser.id;
-        session.user.corsairTenantId = dbUser.corsairTenantId;
-        session.user.gmailConnected = dbUser.gmailConnected ?? false;
-        session.user.calendarConnected = dbUser.calendarConnected ?? false;
+        token.id = dbUser.id;
+        token.corsairTenantId = dbUser.corsairTenantId;
+        token.gmailConnected = dbUser.gmailConnected ?? false;
+        token.calendarConnected = dbUser.calendarConnected ?? false;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token) {
+        session.user.id = token.id as string;
+        session.user.corsairTenantId = token.corsairTenantId as string | null | undefined;
+        session.user.gmailConnected = token.gmailConnected as boolean | undefined;
+        session.user.calendarConnected = token.calendarConnected as boolean | undefined;
       }
       return session;
     },
