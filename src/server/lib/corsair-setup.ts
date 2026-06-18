@@ -1,4 +1,4 @@
-import { createAccountKeyManager, generateDEK, encryptDEK } from "corsair/core";
+import { createAccountKeyManager, createIntegrationKeyManager, generateDEK, encryptDEK } from "corsair/core";
 import { createCorsairDatabase } from "corsair/db";
 import { db, conn } from "@/server/db";
 import { accounts, users, corsairIntegrations, corsairAccounts } from "@/server/db/schema";
@@ -15,9 +15,12 @@ export async function provisionCorsairTenant(userId: string, tenantId: string, k
     throw new Error("No Google OAuth credentials found in user account.");
   }
 
-  // 2. Upsert integrations 'gmail' and 'googlecalendar' — always regenerate DEK so
-  //    it is encrypted with the current KEK. Stale DEKs (from a prior KEK value) are
-  //    overwritten here, which is what resolves "Invalid encrypted data format" errors.
+  // 2. Upsert integrations 'gmail' and 'googlecalendar'.
+  //    The integration DEK encrypts the OAuth client credentials (client_id, client_secret).
+  //    We regenerate the DEK so it is always encrypted with the current KEK, then use
+  //    createIntegrationKeyManager to re-encrypt the client credentials with the new DEK.
+  //    Inserting plaintext credentials directly would make them unreadable to the SDK's
+  //    keyBuilder (which expects AES-GCM encrypted values), silently breaking all API calls.
   const plugins = ["gmail", "googlecalendar"];
   for (const pluginId of plugins) {
     const integrationDek = generateDEK();
@@ -27,21 +30,32 @@ export async function provisionCorsairTenant(userId: string, tenantId: string, k
       where: eq(corsairIntegrations.id, pluginId),
     });
     if (!existingIntegration) {
+      // First time: insert with empty config — credentials will be set via SDK below
       await db.insert(corsairIntegrations).values({
         id: pluginId,
         name: pluginId,
-        config: {
-          client_id: env.AUTH_GOOGLE_ID,
-          client_secret: env.AUTH_GOOGLE_SECRET,
-          redirect_url: `${env.NEXT_PUBLIC_APP_URL}/api/auth/callback/google`,
-        },
+        config: {},
         dek: integrationEncryptedDek,
       });
     } else {
+      // Rotate DEK to keep it encrypted with the current KEK
       await db.update(corsairIntegrations)
         .set({ dek: integrationEncryptedDek, updatedAt: new Date() })
         .where(eq(corsairIntegrations.id, pluginId));
     }
+
+    // Re-encrypt client credentials with the new DEK.
+    // The setter's built-in try-catch handles old-DEK-encrypted config gracefully:
+    // if decryption fails (DEK rotated or first-time), it starts from {} and re-writes.
+    const integrationKm = createIntegrationKeyManager({
+      authType: "oauth_2",
+      integrationName: pluginId,
+      kek,
+      database: createCorsairDatabase(conn),
+    });
+    await integrationKm.set_client_id(env.AUTH_GOOGLE_ID);
+    await integrationKm.set_client_secret(env.AUTH_GOOGLE_SECRET);
+    await integrationKm.set_redirect_url(`${env.NEXT_PUBLIC_APP_URL}/api/auth/callback/google`);
 
     // 3. Upsert account — always regenerate DEK for the same reason
     const accountDek = generateDEK();
