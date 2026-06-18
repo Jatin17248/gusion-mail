@@ -333,30 +333,19 @@ export const gmailRouter = createTRPCRouter({
       });
       const msgList = (listResult.messages ?? []).slice(0, 30) as { id?: string }[];
 
-      // Fetch metadata for each message and upsert into the Corsair entity cache.
-      // Auth errors from individual .get() calls are re-thrown so the outer catch
-      // can surface them — only transient per-message failures are skipped.
+      // Fetch each message. The SDK's messages.get auto-caches entity data
+      // (including subject/from/to extracted from headers) via the entity
+      // repository before returning. We don't do a separate upsert — that
+      // would overwrite the SDK's data with a partial copy that may be missing
+      // fields if header extraction fails.
       let synced = 0;
       for (const msg of msgList) {
         if (!msg.id) continue;
         try {
-          const full = await tenant.gmail.api.messages.get({
+          await tenant.gmail.api.messages.get({
             id: msg.id,
             format: "metadata",
-            metadataHeaders: ["Subject", "From", "To"],
-          });
-          const headers = (full as { payload?: { headers?: { name: string; value: string }[] } }).payload?.headers;
-          await (tenant.gmail.db.messages as unknown as { upsertByEntityId: (id: string, data: Record<string, unknown>) => Promise<unknown> }).upsertByEntityId(msg.id, {
-            id: msg.id,
-            threadId: (full as { threadId?: string }).threadId ?? undefined,
-            snippet: (full as { snippet?: string }).snippet ?? undefined,
-            labelIds: (full as { labelIds?: string[] }).labelIds ?? undefined,
-            internalDate: (full as { internalDate?: string | number }).internalDate != null
-              ? String((full as { internalDate?: string | number }).internalDate)
-              : undefined,
-            subject: getHeader(headers, "Subject") || undefined,
-            from: getHeader(headers, "From") || undefined,
-            to: getHeader(headers, "To") || undefined,
+            metadataHeaders: ["Subject", "From", "To", "Date"],
           });
           synced++;
         } catch (msgErr: unknown) {
