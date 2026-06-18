@@ -44,6 +44,73 @@ export function formatSender(headerValue: string) {
   return name || email.split("@")[0] || headerValue;
 }
 
+type EventFormErrors = Partial<Record<"summary" | "start" | "end" | "attendees", string>>;
+
+const EVENT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateInputValue(date: Date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function formatTimeInputValue(date: Date) {
+  return `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+}
+
+function buildDateTimeFromParts(dateValue: string, timeValue: string) {
+  if (!dateValue || !timeValue) return null;
+
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours, minutes] = timeValue.split(":").map(Number);
+
+  if (!year || !month || !day || hours === undefined || minutes === undefined) {
+    return null;
+  }
+
+  const result = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return Number.isNaN(result.getTime()) ? null : result;
+}
+
+function getDefaultEventDateTimes() {
+  const start = new Date();
+  start.setMinutes(Math.ceil(start.getMinutes() / 30) * 30, 0, 0);
+  if (start.getMinutes() === 0 && start.getSeconds() === 0) {
+    start.setHours(start.getHours() + 1);
+  }
+
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+
+  return {
+    startDate: formatDateInputValue(start),
+    startTime: formatTimeInputValue(start),
+    endDate: formatDateInputValue(end),
+    endTime: formatTimeInputValue(end),
+  };
+}
+
+function applyIsoDateTimeToFields(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return {
+    date: formatDateInputValue(date),
+    time: formatTimeInputValue(date),
+  };
+}
+
+function parseAttendeeEmails(input: string) {
+  return input
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 import {
   Mail,
   Calendar as CalendarIcon,
@@ -124,9 +191,13 @@ export function Dashboard() {
   const [eventSummary, setEventSummary] = useState("");
   const [eventDesc, setEventDesc] = useState("");
   const [eventLoc, setEventLoc] = useState("");
-  const [eventStart, setEventStart] = useState("");
-  const [eventEnd, setEventEnd] = useState("");
+  const [eventPrompt, setEventPrompt] = useState("");
+  const [eventStartDate, setEventStartDate] = useState("");
+  const [eventStartTime, setEventStartTime] = useState("");
+  const [eventEndDate, setEventEndDate] = useState("");
+  const [eventEndTime, setEventEndTime] = useState("");
   const [eventAttendees, setEventAttendees] = useState("");
+  const [eventErrors, setEventErrors] = useState<EventFormErrors>({});
 
   // Debounce search query
   useEffect(() => {
@@ -477,15 +548,47 @@ export function Dashboard() {
     onSuccess: () => {
       toast.success("Calendar invite sent!");
       setCreateEventOpen(false);
+      setEventPrompt("");
       setEventSummary("");
       setEventDesc("");
       setEventLoc("");
-      setEventStart("");
-      setEventEnd("");
+      setEventStartDate("");
+      setEventStartTime("");
+      setEventEndDate("");
+      setEventEndTime("");
       setEventAttendees("");
+      setEventErrors({});
       void utils.calendar.searchEvents.invalidate();
     },
     onError: (err) => toast.error(err.message || "Failed to create event."),
+  });
+
+  const generateCalendarDraft = api.ai.aiCalendarAssist.useMutation({
+    onSuccess: (draft) => {
+      const startParts = applyIsoDateTimeToFields(draft.start);
+      const endParts = applyIsoDateTimeToFields(draft.end);
+
+      setEventSummary(draft.summary);
+      setEventDesc(draft.description ?? "");
+      setEventLoc(draft.location ?? "");
+      setEventAttendees((draft.attendees ?? []).join(", "));
+
+      if (startParts) {
+        setEventStartDate(startParts.date);
+        setEventStartTime(startParts.time);
+      }
+
+      if (endParts) {
+        setEventEndDate(endParts.date);
+        setEventEndTime(endParts.time);
+      }
+
+      setEventErrors({});
+      toast.success("Drafted event details from your prompt.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to generate event draft.");
+    },
   });
 
   const deleteEvent = api.calendar.deleteEvent.useMutation({
@@ -517,6 +620,79 @@ export function Dashboard() {
   useEffect(() => {
     setFocusedIndex(0);
   }, [emails, activeTab]);
+
+  useEffect(() => {
+    if (!createEventOpen) return;
+
+    setEventErrors({});
+
+    if (eventStartDate || eventStartTime || eventEndDate || eventEndTime) return;
+
+    const defaults = getDefaultEventDateTimes();
+    setEventStartDate(defaults.startDate);
+    setEventStartTime(defaults.startTime);
+    setEventEndDate(defaults.endDate);
+    setEventEndTime(defaults.endTime);
+  }, [createEventOpen, eventEndDate, eventEndTime, eventStartDate, eventStartTime]);
+
+  const closeCreateEventModal = () => {
+    setCreateEventOpen(false);
+    setEventPrompt("");
+    setEventErrors({});
+    setEventSummary("");
+    setEventDesc("");
+    setEventLoc("");
+    setEventStartDate("");
+    setEventStartTime("");
+    setEventEndDate("");
+    setEventEndTime("");
+    setEventAttendees("");
+  };
+
+  const submitCreateEvent = () => {
+    const nextErrors: EventFormErrors = {};
+    const trimmedSummary = eventSummary.trim();
+    const trimmedLocation = eventLoc.trim();
+    const trimmedDescription = eventDesc.trim();
+    const attendeesList = parseAttendeeEmails(eventAttendees);
+    const invalidAttendees = attendeesList.filter((email) => !EVENT_EMAIL_RE.test(email));
+    const startAt = buildDateTimeFromParts(eventStartDate, eventStartTime);
+    const endAt = buildDateTimeFromParts(eventEndDate, eventEndTime);
+
+    if (!trimmedSummary) {
+      nextErrors.summary = "Add a clear event title.";
+    }
+
+    if (!startAt) {
+      nextErrors.start = "Choose a valid start date and time.";
+    }
+
+    if (!endAt) {
+      nextErrors.end = "Choose a valid end date and time.";
+    }
+
+    if (startAt && endAt && endAt <= startAt) {
+      nextErrors.end = "End time must be after the start time.";
+    }
+
+    if (attendeesList.length === 0) {
+      nextErrors.attendees = "Add at least one attendee email.";
+    } else if (invalidAttendees.length > 0) {
+      nextErrors.attendees = `Fix invalid email${invalidAttendees.length > 1 ? "s" : ""}: ${invalidAttendees.join(", ")}`;
+    }
+
+    setEventErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0 || !startAt || !endAt) return;
+
+    sendInvite.mutate({
+      summary: trimmedSummary,
+      description: trimmedDescription || undefined,
+      location: trimmedLocation || undefined,
+      start: startAt.toISOString(),
+      end: endAt.toISOString(),
+      attendees: attendeesList,
+    });
+  };
 
   // Keyboard Shortcuts bindings
   useShortcuts({
@@ -971,41 +1147,115 @@ export function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
           <div className="w-full max-w-lg p-6 rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl relative space-y-4">
             <button
-              onClick={() => setCreateEventOpen(false)}
+              onClick={closeCreateEventModal}
               className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-200"
             >
               <X size={18} />
             </button>
             <h3 className="text-md font-bold text-white">Create Calendar Event</h3>
             <div className="space-y-3 text-left">
+              <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-3 space-y-2">
+                <label className="block text-[11px] font-bold text-indigo-300 uppercase tracking-[0.18em]">
+                  Plan with AI
+                </label>
+                <textarea
+                  placeholder="Example: Create a Google Meet with jatin@example.com next Monday at 3pm for 45 minutes to discuss launch planning."
+                  value={eventPrompt}
+                  onChange={(e) => setEventPrompt(e.target.value)}
+                  rows={3}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition resize-none"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-zinc-500">
+                    Describe the event naturally and we&apos;ll fill the form for review.
+                  </p>
+                  <button
+                    onClick={() => generateCalendarDraft.mutate({ prompt: eventPrompt })}
+                    disabled={!eventPrompt.trim() || generateCalendarDraft.isPending}
+                    className="px-3 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer disabled:opacity-50"
+                  >
+                    {generateCalendarDraft.isPending ? "Drafting..." : "Generate Draft"}
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-zinc-500 mb-1">Event Title</label>
                 <input
                   type="text"
                   placeholder="Team sync meeting"
                   value={eventSummary}
-                  onChange={(e) => setEventSummary(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
+                  onChange={(e) => {
+                    setEventSummary(e.target.value);
+                    setEventErrors((prev) => ({ ...prev, summary: undefined }));
+                  }}
+                  aria-invalid={!!eventErrors.summary}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
                 />
+                {eventErrors.summary ? (
+                  <p className="mt-1 text-[11px] text-rose-400">{eventErrors.summary}</p>
+                ) : null}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-500 mb-1">Start Time</label>
-                  <input
-                    type="datetime-local"
-                    value={eventStart}
-                    onChange={(e) => setEventStart(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                    <input
+                      type="date"
+                      value={eventStartDate}
+                      onChange={(e) => {
+                        setEventStartDate(e.target.value);
+                        setEventErrors((prev) => ({ ...prev, start: undefined }));
+                      }}
+                      aria-invalid={!!eventErrors.start}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
+                    />
+                    <input
+                      type="time"
+                      value={eventStartTime}
+                      onChange={(e) => {
+                        setEventStartTime(e.target.value);
+                        setEventErrors((prev) => ({ ...prev, start: undefined }));
+                      }}
+                      aria-invalid={!!eventErrors.start}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
+                    />
+                  </div>
+                  {eventErrors.start ? (
+                    <p className="mt-1 text-[11px] text-rose-400">{eventErrors.start}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-zinc-500">Shown in your local timezone.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-zinc-500 mb-1">End Time</label>
-                  <input
-                    type="datetime-local"
-                    value={eventEnd}
-                    onChange={(e) => setEventEnd(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                    <input
+                      type="date"
+                      value={eventEndDate}
+                      onChange={(e) => {
+                        setEventEndDate(e.target.value);
+                        setEventErrors((prev) => ({ ...prev, end: undefined }));
+                      }}
+                      aria-invalid={!!eventErrors.end}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
+                    />
+                    <input
+                      type="time"
+                      value={eventEndTime}
+                      onChange={(e) => {
+                        setEventEndTime(e.target.value);
+                        setEventErrors((prev) => ({ ...prev, end: undefined }));
+                      }}
+                      aria-invalid={!!eventErrors.end}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
+                    />
+                  </div>
+                  {eventErrors.end ? (
+                    <p className="mt-1 text-[11px] text-rose-400">{eventErrors.end}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-zinc-500">Default duration is one hour.</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -1024,9 +1274,18 @@ export function Dashboard() {
                   type="text"
                   placeholder="guest1@example.com, guest2@example.com"
                   value={eventAttendees}
-                  onChange={(e) => setEventAttendees(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
+                  onChange={(e) => {
+                    setEventAttendees(e.target.value);
+                    setEventErrors((prev) => ({ ...prev, attendees: undefined }));
+                  }}
+                  aria-invalid={!!eventErrors.attendees}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition aria-invalid:border-rose-500"
                 />
+                {eventErrors.attendees ? (
+                  <p className="mt-1 text-[11px] text-rose-400">{eventErrors.attendees}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-zinc-500">Add one or more invitees separated by commas.</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-zinc-500 mb-1">Description</label>
@@ -1041,28 +1300,14 @@ export function Dashboard() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => setCreateEventOpen(false)}
+                onClick={closeCreateEventModal}
                 className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const attendeesList = eventAttendees
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter((item) => item.includes("@"));
-
-                  sendInvite.mutate({
-                    summary: eventSummary,
-                    description: eventDesc,
-                    location: eventLoc,
-                    start: new Date(eventStart).toISOString(),
-                    end: new Date(eventEnd).toISOString(),
-                    attendees: attendeesList,
-                  });
-                }}
-                disabled={!eventSummary || !eventStart || !eventEnd || sendInvite.isPending}
+                onClick={submitCreateEvent}
+                disabled={sendInvite.isPending || generateCalendarDraft.isPending}
                 className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
               >
                 <span>Create & Invite</span>

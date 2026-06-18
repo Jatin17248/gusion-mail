@@ -24,6 +24,50 @@ async function verifyPremium(userId: string) {
 }
 
 export const aiRouter = createTRPCRouter({
+  aiCalendarAssist: protectedProcedure
+    .input(
+      z.object({
+        prompt: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await verifyPremium(ctx.session.user.id);
+      trackEvent(ctx.session.user.id, "ai_calendar_assist_triggered", {
+        promptLength: input.prompt.length,
+      });
+
+      const now = new Date();
+
+      const { object } = await generateObject({
+        model: google("gemini-2.5-flash"),
+        schema: z.object({
+          summary: z.string().describe("Short event title"),
+          description: z.string().optional().describe("Optional event description"),
+          location: z.string().optional().describe("Optional event location"),
+          start: z.string().describe("ISO 8601 datetime string for the event start"),
+          end: z.string().describe("ISO 8601 datetime string for the event end"),
+          attendees: z
+            .array(z.string().email())
+            .describe("List of attendee email addresses, or an empty array if none were provided"),
+        }),
+        system: `You turn natural-language scheduling requests into structured calendar event drafts.
+Current time: ${now.toISOString()}.
+User timezone: Asia/Kolkata.
+
+Rules:
+- Always return valid ISO datetime strings for start and end.
+- If the user gives only a start time and no end time, default to a 1 hour duration.
+- If the user implies a Google Meet, use "Google Meet" as the location unless a more specific location is given.
+- Keep the event title concise and polished.
+- Only include attendee emails explicitly mentioned or clearly inferable from the prompt.
+- If no attendees are provided, return an empty array.
+- If the prompt is vague, make the safest reasonable assumption rather than leaving fields blank.`,
+        prompt: input.prompt,
+      });
+
+      return object;
+    }),
+
   aiCompose: protectedProcedure
     .input(
       z.object({

@@ -21,58 +21,96 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  const session = await auth();
+async function getSafeSession() {
+  try {
+    return await auth();
+  } catch (error) {
+    console.error("[layout] Failed to load session:", error);
+    return null;
+  }
+}
 
+async function getLayoutState(sessionUserId?: string) {
   let isSuspended = false;
   let isMaintenance = false;
   let isStaff = false;
   let impersonatedEmail = "";
   let showImpersonationBanner = false;
 
-  if (session?.user?.id) {
-    const dbUser = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-    });
+  if (sessionUserId) {
+    try {
+      const dbUser = await db.query.users.findFirst({
+        where: eq(users.id, sessionUserId),
+      });
 
-    if (dbUser) {
-      const adminEmails = process.env.PRODUCT_ADMIN_EMAILS
-        ? process.env.PRODUCT_ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase())
-        : [];
-      isStaff =
-        dbUser.isStaff === true ||
-        (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) ||
-        false;
-      isSuspended = !!dbUser.suspendedAt;
+      if (dbUser) {
+        const adminEmails = process.env.PRODUCT_ADMIN_EMAILS
+          ? process.env.PRODUCT_ADMIN_EMAILS
+              .split(",")
+              .map((e) => e.trim().toLowerCase())
+          : [];
 
-      if (isStaff) {
-        const nextHeaders = await import("next/headers");
-        const cookiesList = await nextHeaders.cookies();
-        const impId = cookiesList.get("gusion_impersonate_id")?.value;
-        if (impId && impId !== session.user.id) {
-          const impUser = await db.query.users.findFirst({
-            where: eq(users.id, impId),
-          });
-          if (impUser) {
-            showImpersonationBanner = true;
-            impersonatedEmail = impUser.email ?? "";
+        isStaff =
+          dbUser.isStaff === true ||
+          (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) ||
+          false;
+        isSuspended = !!dbUser.suspendedAt;
+
+        if (isStaff) {
+          const nextHeaders = await import("next/headers");
+          const cookiesList = await nextHeaders.cookies();
+          const impId = cookiesList.get("gusion_impersonate_id")?.value;
+
+          if (impId && impId !== sessionUserId) {
+            const impUser = await db.query.users.findFirst({
+              where: eq(users.id, impId),
+            });
+
+            if (impUser) {
+              showImpersonationBanner = true;
+              impersonatedEmail = impUser.email ?? "";
+            }
           }
         }
       }
+    } catch (error) {
+      console.error("[layout] Failed to load user state:", error);
     }
   }
 
-  // Check maintenance mode if not staff
   if (!isStaff) {
-    const maintenanceConfig = await db.query.systemConfigs.findFirst({
-      where: eq(systemConfigs.key, "maintenanceMode"),
-    });
-    if (maintenanceConfig && JSON.parse(maintenanceConfig.value) === true) {
-      isMaintenance = true;
+    try {
+      const maintenanceConfig = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "maintenanceMode"),
+      });
+
+      if (maintenanceConfig && JSON.parse(maintenanceConfig.value) === true) {
+        isMaintenance = true;
+      }
+    } catch (error) {
+      console.error("[layout] Failed to load maintenance mode:", error);
     }
   }
+
+  return {
+    isSuspended,
+    isMaintenance,
+    isStaff,
+    impersonatedEmail,
+    showImpersonationBanner,
+  };
+}
+
+export default async function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const session = await getSafeSession();
+  const {
+    isSuspended,
+    isMaintenance,
+    impersonatedEmail,
+    showImpersonationBanner,
+  } = await getLayoutState(session?.user?.id);
 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>

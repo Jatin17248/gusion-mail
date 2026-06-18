@@ -373,5 +373,69 @@ html:not(.dark) {
   .dashboard-root .bg-zinc-800 {
     background-color: oklch(0.92 0 0) !important;
   }
+
+  /* Translucent/opacity borders and backgrounds general overrides */
+  .dashboard-root [class*="border-white/"]:not(.bg-indigo-600 *):not(.bg-rose-500 *):not(.bg-gradient-to-r *):not(button):not(button *) {
+    border-color: rgba(9, 9, 11, 0.08) !important;
+  }
+  .dashboard-root [class*="bg-white/"]:not(.bg-white):not(.bg-indigo-600 *):not(.bg-rose-500 *):not(.bg-gradient-to-r *):not(button):not(button *) {
+    background-color: rgba(9, 9, 11, 0.04) !important;
+  }
+
+  /* Calendar specific overrides */
+  .dashboard-root .bg-zinc-950\/85 {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+  }
+  .dashboard-root .bg-white\/\[0\.035\] {
+    background-color: oklch(1 0 0) !important;
+  }
+  .dashboard-root .bg-zinc-950\/80 {
+    background-color: oklch(0.97 0 0) !important;
+  }
+  .dashboard-root .bg-black\/20 {
+    background-color: rgba(9, 9, 11, 0.03) !important;
+  }
+  .dashboard-root .bg-black\/10 {
+    background-color: rgba(9, 9, 11, 0.02) !important;
+  }
+  .dashboard-root .text-sky-200,
+  .dashboard-root .text-sky-300 {
+    color: oklch(0.48 0.2 240) !important; /* sky-600 */
+  }
+  .dashboard-root .text-emerald-200 {
+    color: oklch(0.45 0.18 150) !important; /* emerald-600 */
+  }
+  .dashboard-root .border-sky-400\/25,
+  .dashboard-root .border-sky-400\/20 {
+    border-color: rgba(14, 165, 233, 0.35) !important;
+  }
+  .dashboard-root .border-emerald-400\/15 {
+    border-color: rgba(16, 185, 129, 0.3) !important;
+  }
+  .dashboard-root .bg-sky-500\/10 {
+    background-color: rgba(14, 165, 233, 0.08) !important;
+  }
+  .dashboard-root .bg-emerald-500\/8 {
+    background-color: rgba(16, 185, 129, 0.06) !important;
+  }
+
+  /* This Week gradient card */
+  .dashboard-root .bg-gradient-to-br.from-sky-500\/18.via-zinc-950.to-emerald-500\/12 {
+    background-image: linear-gradient(to bottom right, rgba(14, 165, 233, 0.1), rgba(255, 255, 255, 0.95), rgba(16, 185, 129, 0.08)) !important;
+    box-shadow: 0 10px 30px -10px rgba(14, 165, 233, 0.15) !important;
+  }
+
+  /* Text color corrections for text-white */
+  .dashboard-root .text-white:not(button):not(button *):not(a):not(a *):not(.bg-gradient-to-r):not(.bg-indigo-600):not(.bg-rose-500):not(.bg-indigo-600 *):not(.bg-rose-500 *):not(.bg-gradient-to-r *) {
+    color: #012b57 !important;
+  }
+
+  /* Hover classes on calendar elements */
+  .dashboard-root .hover\:bg-white\/8:hover {
+    background-color: rgba(9, 9, 11, 0.06) !important;
+  }
+  .dashboard-root .hover\:text-zinc-100:hover {
+    color: #000000 !important;
+  }
 }
 
