@@ -95,7 +95,7 @@ const LoginForm = () => {
             <Label>Password</Label>
             <Link
               href="/forgot-password"
-              className="text-[11px] font-medium text-[#0067ff] hover:underline"
+              className="text-[11px] font-medium text-indigo-500 hover:underline"
             >
               Forgot password?
             </Link>
@@ -131,11 +131,11 @@ const LoginForm = () => {
           type="submit"
           size="lg"
           disabled={isLoading}
-          className="mt-2 w-full h-[48px] rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold flex items-center justify-center gap-2
+          className="mt-2 w-full h-12 rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold flex items-center justify-center gap-2
                   shadow-[0_10px_20px_rgba(230,31,42,0.25)] hover:bg-[#cf1a24] hover:shadow-[0_14px_28px_rgba(230,31,42,0.35)] 
                   active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="relative top-[-1px]">{isLoading ? "Signing in..." : "Sign in"}</span>
+          <span className="relative -top-px">{isLoading ? "Signing in..." : "Sign in"}</span>
         </Button>
 
         {/* Divider */}

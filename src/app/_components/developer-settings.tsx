@@ -205,7 +205,7 @@ export function DeveloperSettingsView() {
             {!keysList || keysList.length === 0 ? (
               <p className="text-xs text-zinc-500 italic">No keys generated yet.</p>
             ) : (
-              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-50 overflow-y-auto pr-1">
                 {keysList.map((key) => {
                   const scopesArr = parseStringArray(key.scopes);
 
@@ -294,7 +294,7 @@ export function DeveloperSettingsView() {
             {!webhooksList || webhooksList.length === 0 ? (
               <p className="text-xs text-zinc-500 italic">No webhook endpoints configured.</p>
             ) : (
-              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {webhooksList.map((wh) => {
                   const eventsArr = parseStringArray(wh.events);
 
@@ -355,7 +355,7 @@ export function DeveloperSettingsView() {
               {!deliveryLogs || deliveryLogs.length === 0 ? (
                 <p className="text-xs text-zinc-550 italic">No delivery events logged yet.</p>
               ) : (
-                <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {deliveryLogs.map((log) => (
                     <div
                       key={log.id}

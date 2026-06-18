@@ -131,11 +131,11 @@ export default function ModalBody1() {
 
   const handleBookNowClick = () => {
     // Call handleSubmit directly
-    handleSubmit();
+    void handleSubmit();
   };
 
 
-  const images = ["https://cdn.gusion.omsoftwares.in/images/onboarding/step1.webp", "https://cdn.gusion.omsoftwares.in/images/onboarding/step2.webp", "https://cdn.gusion.omsoftwares.in/images/onboarding/step4.webp", "https://cdn.gusion.omsoftwares.in/images/onboarding/step6.webp"];
+  const images = ["/images/onboarding/step1.webp", "/images/onboarding/step2.webp", "/images/onboarding/step4.webp", "/images/onboarding/step6.webp"];
   return (
     <ModalBody>
       <ModalContent>

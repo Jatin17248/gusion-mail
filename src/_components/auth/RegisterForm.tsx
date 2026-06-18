@@ -201,11 +201,11 @@ const RegisterForm = () => {
           type="submit"
           size="lg"
           disabled={loading}
-          className="mt-2 w-full h-[48px] rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold flex items-center justify-center gap-2
+          className="mt-2 w-full h-12 rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold flex items-center justify-center gap-2
                   shadow-[0_10px_20px_rgba(230,31,42,0.25)] hover:bg-[#cf1a24] hover:shadow-[0_14px_28px_rgba(230,31,42,0.35)] 
                   active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="relative top-[-1px]">
+          <span className="relative -top-px">
             {loading ? "Creating Account..." : "GET STARTED"}
           </span>
         </Button>

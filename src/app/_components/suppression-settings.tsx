@@ -84,7 +84,7 @@ export function SuppressionListSettingsView() {
           {!filteredList || filteredList.length === 0 ? (
             <p className="text-xs text-zinc-500 italic text-center py-4">No suppressed emails found.</p>
           ) : (
-            <div className="border border-zinc-855 rounded-xl divide-y divide-zinc-900 max-h-[300px] overflow-y-auto">
+            <div className="border border-zinc-855 rounded-xl divide-y divide-zinc-900 max-h-75 overflow-y-auto">
               {filteredList.map((item) => (
                 <div key={item.id} className="p-3 flex items-center justify-between gap-4 bg-zinc-950/20">
                   <div className="flex items-center gap-2.5 min-w-0">

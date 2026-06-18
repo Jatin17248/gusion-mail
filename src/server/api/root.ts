@@ -18,6 +18,7 @@ import { bulkRouter } from "@/server/api/routers/bulk";
 import { searchRouter } from "@/server/api/routers/search";
 import { sharedMailboxRouter } from "@/server/api/routers/shared-mailboxes";
 import { sheetsRouter } from "@/server/api/routers/sheets";
+import { adminRouter } from "@/server/api/routers/admin";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -45,6 +46,7 @@ export const appRouter = createTRPCRouter({
   sharedMailboxes: sharedMailboxRouter,
   sheets: sheetsRouter,
   connectedAccounts: connectedAccountsRouter,
+  admin: adminRouter,
 });
 
 // export type definition of API

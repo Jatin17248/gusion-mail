@@ -1,22 +1,38 @@
 "use client";
+import { useEffect } from "react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
 import RegisterForm from "./RegisterForm";
 import RightFormRotations from "./RightFormRotations";
+import Header from "@/components/Header";
 
 const RegisterMain = () => {
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    const hadDark = htmlElement.classList.contains("dark");
+    if (hadDark) {
+      htmlElement.classList.remove("dark");
+    }
+    return () => {
+      if (hadDark) {
+        htmlElement.classList.add("dark");
+      }
+    };
+  }, []);
+
   return (
     <>
       <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
+        <Header />
         {/* Warm gradient wash */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+        <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
 
         {/* Color blobs + glass orbit */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
           <div className="absolute -top-24 -left-20 h-80 w-80 rounded-full bg-[#e61f2a]/18 blur-3xl" />
-          <div className="absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-[#0067ff]/16 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 h-[22rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
+          <div className="absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-indigo-500/16 blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 h-88 w-160 -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
         </div>
 
         {/* Main content */}
@@ -25,7 +41,7 @@ const RegisterMain = () => {
             layoutId="auth-container"
             className="w-full max-w-5xl grid items-center lg:grid-cols-[minmax(0,1fr)_1.15fr]
         rounded-[30px] 
-        bg-[url('https://cdn.gusion.omsoftwares.in/images/login-banner-bg.jpg')] bg-[linear-gradient(275deg,_rgb(205,214,229)_0%,_rgb(211,246,242)_100%)] bg-no-repeat bg-cover bg-center
+        auth-banner-bg
         shadow-2xl overflow-hidden
         "
           >

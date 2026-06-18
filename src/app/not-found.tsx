@@ -28,7 +28,7 @@ const FloatingStar = ({ delay, x, y, size }: { delay: number; x: number; y: numb
             height={size}
             viewBox="0 0 24 24"
             fill="none"
-            className="text-[#0067ff]"
+            className="text-indigo-500"
         >
             <path
                 d="M12 2L14.09 8.26L21 9.27L16 14.14L17.18 21.02L12 17.77L6.82 21.02L8 14.14L3 9.27L9.91 8.26L12 2Z"
@@ -74,7 +74,7 @@ export default function NotFound() {
     return (
         <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-linear-to-br from-[#f8f9ff] via-[#e8f4ff] to-[#fff8f0] dark:from-[#0a0a0f] dark:via-[#0f1419] dark:to-[#0a0a0f]">
             {/* Animated background orbs */}
-            <GradientOrb className="w-96 h-96 bg-[#0067ff] -top-20 -left-20" />
+            <GradientOrb className="w-96 h-96 bg-indigo-500 -top-20 -left-20" />
             <GradientOrb className="w-80 h-80 bg-[#00d4ff] -bottom-10 -right-10" />
             <GradientOrb className="w-64 h-64 bg-[#ff6b6b] top-1/3 right-1/4" />
 
@@ -106,12 +106,12 @@ export default function NotFound() {
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.6, delay: 0.2 }}
                 >
-                    <h1 className="text-[140px] sm:text-[180px] md:text-[220px] font-black leading-none tracking-tighter bg-linear-to-br from-[#0067ff] via-[#00a3ff] to-[#00d4ff] bg-clip-text text-transparent select-none">
+                    <h1 className="text-[140px] sm:text-45 md:text-55 font-black leading-none tracking-tighter bg-linear-to-br from-indigo-500 via-[#00a3ff] to-[#00d4ff] bg-clip-text text-transparent select-none">
                         404
                     </h1>
 
                     {/* Glowing effect behind 404 */}
-                    <div className="absolute inset-0 text-[140px] sm:text-[180px] md:text-[220px] font-black leading-none tracking-tighter text-[#0067ff] opacity-20 blur-2xl -z-10">
+                    <div className="absolute inset-0 text-[140px] sm:text-45 md:text-55 font-black leading-none tracking-tighter text-indigo-500 opacity-20 blur-2xl -z-10">
                         404
                     </div>
                 </motion.div>
@@ -123,7 +123,7 @@ export default function NotFound() {
                     animate={{ opacity: 1, rotate: 0 }}
                     transition={{ duration: 0.6, delay: 0.4 }}
                 >
-                    <div className="flex items-center gap-2 px-5 py-2 bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-full border border-[#0067ff]/20 shadow-lg shadow-[#0067ff]/5">
+                    <div className="flex items-center gap-2 px-5 py-2 bg-white/80 dark:bg-white/10 backdrop-blur-sm rounded-full border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
                         <motion.svg
                             width="24"
                             height="24"
@@ -169,7 +169,7 @@ export default function NotFound() {
                 >
                     <Link href="/">
                         <motion.button
-                            className="group relative px-8 py-4 bg-linear-to-r from-[#0067ff] to-[#0052cc] text-white font-semibold rounded-xl shadow-xl shadow-[#0067ff]/25 hover:shadow-2xl hover:shadow-[#0067ff]/30 transition-all duration-300 overflow-hidden cursor-pointer"
+                            className="group relative px-8 py-4 bg-linear-to-r from-indigo-500 to-[#0052cc] text-white font-semibold rounded-xl shadow-xl shadow-indigo-500/25 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all duration-300 overflow-hidden cursor-pointer"
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                         >
@@ -197,7 +197,7 @@ export default function NotFound() {
 
                     <motion.button
                         onClick={() => signIn("google")}
-                        className="px-8 py-4 bg-white/80 dark:bg-white/10 backdrop-blur-sm text-[#012b57] dark:text-white font-semibold rounded-xl border border-[#0067ff]/20 hover:border-[#0067ff]/40 hover:bg-white dark:hover:bg-white/20 transition-all duration-300 cursor-pointer"
+                        className="px-8 py-4 bg-white/80 dark:bg-white/10 backdrop-blur-sm text-[#012b57] dark:text-white font-semibold rounded-xl border border-indigo-500/20 hover:border-indigo-500/40 hover:bg-white dark:hover:bg-white/20 transition-all duration-300 cursor-pointer"
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
                     >

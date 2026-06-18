@@ -40,12 +40,12 @@ const RightFormRotations = ({
 
   return (
     <>
-      <div className={`hidden lg:flex flex-col justify-center items-center text-center h-full min-h-[500px] p-12
+      <div className={`hidden lg:flex flex-col justify-center items-center text-center h-full min-h-125 p-12
 
           ${isRight ?"order-1 lg:order-2" : ""}`}>  
             {/* Static Header */}
             <div className="mb-8 space-y-3">
-              <h1 className="text-4xl font-bold tracking-tight text-[#0067ff]">
+              <h1 className="text-4xl font-bold tracking-tight text-indigo-500">
                 Your AI Email Assistant
               </h1>
               <p className="text-sm text-neutral-600 max-w-xs mx-auto">
@@ -53,7 +53,7 @@ const RightFormRotations = ({
               </p>
             </div>
 
-            <div className="relative w-full max-w-md flex flex-col items-center justify-center h-[220px]">
+            <div className="relative w-full max-w-md flex flex-col items-center justify-center h-55">
               <AnimatePresence mode="wait">
                 {feature && (
                   <motion.div
@@ -82,7 +82,7 @@ const RightFormRotations = ({
                       <h2 className="text-xl font-semibold text-[#1a1a1a]">
                         {feature.title}
                       </h2>
-                      <p className="text-sm text-neutral-500 max-w-[260px] mx-auto leading-relaxed">
+                      <p className="text-sm text-neutral-500 max-w-65 mx-auto leading-relaxed">
                         {feature.description}
                       </p>
                     </div>
@@ -99,7 +99,7 @@ const RightFormRotations = ({
                 <button
                   type="button"
                   onClick={() => router.push(ctaRoute)}
-                  className="group relative inline-flex h-10 items-center justify-center overflow-hidden rounded-xl bg-white/80 px-6 py-2 font-medium text-[#0067ff] shadow-sm transition-all duration-300 hover:bg-white hover:shadow-md hover:scale-105"
+                  className="group relative inline-flex h-10 items-center justify-center overflow-hidden rounded-xl bg-white/80 px-6 py-2 font-medium text-indigo-500 shadow-sm transition-all duration-300 hover:bg-white hover:shadow-md hover:scale-105"
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     {ctaBtnText}

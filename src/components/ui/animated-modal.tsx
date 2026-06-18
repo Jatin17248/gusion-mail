@@ -2,16 +2,17 @@
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import React, {
-  ReactNode,
   createContext,
   useContext,
   useEffect,
   useRef,
   useState,
 } from "react";
-import { useLenis } from "lenis/react";
+import type { ReactNode } from "react";
+// import { useLenis } from "lenis/react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useMobileOptimization } from "@/hooks/useMobileOptimization";
+
 
 interface ModalContextType {
   open: boolean;
@@ -79,7 +80,6 @@ export const ModalBody = ({
   className?: string;
 }) => {
   const { open } = useModal();
-  const lenis = useLenis();
   const { isMobile, shouldReduceAnimations, springConfig, enableBlur } = useMobileOptimization();
 
   const isDesktop: boolean = useMediaQuery("(min-width: 1024px)");
@@ -88,14 +88,10 @@ export const ModalBody = ({
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
-      // Stop Lenis smooth scroll when modal is open
-      lenis?.stop();
     } else {
       document.body.style.overflow = "auto";
-      // Resume Lenis smooth scroll when modal is closed
-      lenis?.start();
     }
-  }, [open, lenis]);
+  }, [open]);
 
   // Use ref only on client to avoid SSR mismatch
   const modalRef = useRef<HTMLDivElement>(null);
@@ -161,11 +157,11 @@ export const ModalBody = ({
           </motion.div>
 
           {isDesktop && isHeight && (
-            <section className="relative px-4 max-w-[1080px] text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 text-[9rem] sm:text-[14rem] md:text-[16rem] lg:text-[18rem] leading-[1] pointer-events-none font-bold -mb-[11%] sm:-mb-[7%] duration-200 ease-in-out l-10">
-              <div className="text-[#fae4c5] animate-[pulse_4s_infinite] drop-shadow-xl select-none opacity-40 z-[100]">
+            <section className="relative px-4 max-w-270 text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 text-[9rem] sm:text-[14rem] md:text-[16rem] lg:text-[18rem] leading-[1] pointer-events-none font-bold -mb-[11%] sm:-mb-[7%] duration-200 ease-in-out l-10">
+              <div className="text-[#fae4c5] animate-[pulse_4s_infinite] drop-shadow-xl select-none opacity-40 z-100">
                 Gusion
               </div>
-              <div className="bg-gradient-to-b from-transparent via-white to-white h-[20%] w-full absolute bottom-0 left-0 z-20"></div>
+              <div className="bg-linear-to-b from-transparent via-white to-white h-[20%] w-full absolute bottom-0 left-0 z-20"></div>
             </section>
           )}
         </motion.div>
@@ -254,16 +250,14 @@ const CloseIcon = () => {
   );
 };
 
-// Hook to detect clicks outside of a component.
-// Add it in a separate file, I've added here for simplicity
 export const useOutsideClick = (
-  ref: React.RefObject<HTMLDivElement>,
-  callback: Function
+  ref: React.RefObject<HTMLDivElement | null>,
+  callback: (event: MouseEvent | TouchEvent) => void
 ) => {
   useEffect(() => {
-    const listener = (event: any) => {
+    const listener = (event: MouseEvent | TouchEvent) => {
       // DO NOTHING if the element being clicked is the target element or their children
-      if (!ref.current || ref.current.contains(event.target)) {
+      if (!ref.current || ref.current.contains(event.target as Node)) {
         return;
       }
       callback(event);

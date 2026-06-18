@@ -1,33 +1,45 @@
 "use client";
+import { useEffect } from "react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import LoginForm from "./LoginForm";
 import RightFormRotations from "./RightFormRotations";
+import Header from "@/components/Header";
 
 const LoginMain = () => {
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    const hadDark = htmlElement.classList.contains("dark");
+    if (hadDark) {
+      htmlElement.classList.remove("dark");
+    }
+    return () => {
+      if (hadDark) {
+        htmlElement.classList.add("dark");
+      }
+    };
+  }, []);
+
   return (
     <>
       <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
+        <Header />
         {/* Warm gradient wash */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+        <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
 
         {/* Color blobs + glass orbit */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
           <div className="absolute -top-24 -right-20 h-80 w-80 rounded-full bg-[#e61f2a]/18 blur-3xl" />
-          <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-[#0067ff]/16 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 h-[22rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
+          <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-indigo-500/16 blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 h-88 w-160 -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
         </div>
 
         {/* Main content */}
         <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10 sm:py-0">
           <motion.div
             layoutId="auth-container"
-            className="w-full max-w-5xl grid items-center lg:grid-cols-[1.15fr_minmax(0,1fr)]
-        rounded-[30px] 
-        bg-[url('https://cdn.gusion.omsoftwares.in/images/login-banner-bg.jpg')] bg-[linear-gradient(275deg,_rgb(205,214,229)_0%,_rgb(211,246,242)_100%)] bg-no-repeat bg-cover bg-center
-        shadow-2xl overflow-hidden
-        "
+            className="w-full max-w-5xl grid items-center lg:grid-cols-[1.15fr_minmax(0,1fr)] rounded-[30px] auth-banner-bg shadow-2xl overflow-hidden"
           >
             {/* Left: Rotating Features */}
             <RightFormRotations
@@ -70,3 +82,7 @@ const LoginMain = () => {
 };
 
 export default LoginMain;
+
+
+
+ 

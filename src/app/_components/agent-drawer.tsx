@@ -144,7 +144,7 @@ export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
           <div className="flex flex-col items-center justify-center h-full text-center space-y-2 p-6 text-zinc-500">
             <Sparkles size={24} className="text-zinc-700" />
             <p className="text-xs font-semibold">How can I help you today?</p>
-            <p className="text-[11px] leading-normal max-w-[200px]">
+            <p className="text-[11px] leading-normal max-w-50">
               &quot;Draft a reply to Sarah,&quot; &quot;Find events this week,&quot; or &quot;Schedule a sync meeting with guests.&quot;
             </p>
           </div>

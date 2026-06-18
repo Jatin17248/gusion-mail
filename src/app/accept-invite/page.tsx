@@ -42,8 +42,21 @@ function AcceptInviteContent() {
     });
 
     useEffect(() => {
+        const htmlElement = document.documentElement;
+        const hadDark = htmlElement.classList.contains("dark");
+        if (hadDark) {
+            htmlElement.classList.remove("dark");
+        }
+        return () => {
+            if (hadDark) {
+                htmlElement.classList.add("dark");
+            }
+        };
+    }, []);
+
+    useEffect(() => {
         if (token) {
-            fetchInviteDetails();
+            void fetchInviteDetails();
         } else {
             setErrorType("NOT_FOUND");
             setLoading(false);
@@ -54,14 +67,14 @@ function AcceptInviteContent() {
     // This ensures we get the updated userExists status for newly created OAuth accounts
     useEffect(() => {
         if (session && token && !loading) {
-            fetchInviteDetails();
+            void fetchInviteDetails();
         }
     }, [session?.user?.email]); // Re-fetch when session email changes
 
     // Auto-accept for logged-in existing users
     useEffect(() => {
         if (session && userExists && inviteData && !success) {
-            acceptInviteForExistingUser();
+            void acceptInviteForExistingUser();
         }
     }, [session, userExists, inviteData, success]);
 
@@ -157,12 +170,12 @@ function AcceptInviteContent() {
     };
 
     const handleOAuthLogin = (provider: string) => {
-        signIn(provider, { callbackUrl: `/accept-invite?token=${token}` });
+        void signIn(provider, { callbackUrl: `/accept-invite?token=${token}` });
     };
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]">
+            <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]">
                 <Loader2 className="w-8 h-8 animate-spin text-[#e61f2a]" />
             </div>
         );
@@ -171,7 +184,7 @@ function AcceptInviteContent() {
     if (errorType) {
         return (
             <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+                <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
                 <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
                     <AcceptInviteErrorCard errorType={errorType} />
                 </div>
@@ -182,7 +195,7 @@ function AcceptInviteContent() {
     if (success) {
         return (
             <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+                <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
                 <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
                     <Card className="max-w-md w-full shadow-2xl">
                         <CardContent className="py-12 text-center">
@@ -193,7 +206,7 @@ function AcceptInviteContent() {
                                 Welcome to the Team!
                             </h2>
                             <p className="text-slate-600 mb-6">
-                                You've successfully joined <strong>{inviteData?.businessName}</strong>
+                                You&apos;ve successfully joined <strong>{inviteData?.businessName}</strong>
                             </p>
                             <p className="text-sm text-slate-500">Redirecting to dashboard...</p>
                         </CardContent>
@@ -207,10 +220,10 @@ function AcceptInviteContent() {
     if (userExists && !session) {
         return (
             <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+                <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
                 <div className="pointer-events-none absolute inset-0 hidden sm:block">
                     <div className="absolute -top-24 -right-20 h-80 w-80 rounded-full bg-[#e61f2a]/18 blur-3xl" />
-                    <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-[#0067ff]/16 blur-3xl" />
+                    <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-indigo-500/16 blur-3xl" />
                 </div>
 
                 <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
@@ -221,10 +234,10 @@ function AcceptInviteContent() {
                     >
                         <Card className="shadow-2xl border-0">
                             <CardHeader className="text-center space-y-3 pb-6">
-                                <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#e61f2a] to-[#ff4444] rounded-2xl flex items-center justify-center shadow-lg">
+                                <div className="w-16 h-16 mx-auto bg-linear-to-br from-[#e61f2a] to-[#ff4444] rounded-2xl flex items-center justify-center shadow-lg">
                                     <Users className="w-8 h-8 text-white" />
                                 </div>
-                                <CardTitle className="text-2xl font-bold">You're Invited!</CardTitle>
+                                <CardTitle className="text-2xl font-bold">You&apos;re Invited!</CardTitle>
                                 <CardDescription className="text-base">
                                     Join <strong className="text-slate-900">{inviteData?.businessName}</strong>
                                 </CardDescription>
@@ -274,11 +287,11 @@ function AcceptInviteContent() {
     // New user - show registration form matching login page design
     return (
         <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
-            <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+            <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
             <div className="pointer-events-none absolute inset-0 hidden sm:block">
                 <div className="absolute -top-24 -right-20 h-80 w-80 rounded-full bg-[#e61f2a]/18 blur-3xl" />
-                <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-[#0067ff]/16 blur-3xl" />
-                <div className="absolute top-1/2 left-1/2 h-[22rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
+                <div className="absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-indigo-500/16 blur-3xl" />
+                <div className="absolute top-1/2 left-1/2 h-88 w-160 -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
             </div>
 
             <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10">
@@ -289,12 +302,12 @@ function AcceptInviteContent() {
                 >
                     <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur">
                         <CardHeader className="text-center space-y-3 pb-6">
-                            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#e61f2a] to-[#ff4444] rounded-2xl flex items-center justify-center shadow-lg">
+                            <div className="w-16 h-16 mx-auto bg-linear-to-br from-[#e61f2a] to-[#ff4444] rounded-2xl flex items-center justify-center shadow-lg">
                                 <Users className="w-8 h-8 text-white" />
                             </div>
                             <CardTitle className="text-2xl font-bold">Complete Your Profile</CardTitle>
                             <CardDescription className="text-base">
-                                You've been invited to join <strong className="text-slate-900">{inviteData?.businessName}</strong>
+                                You&apos;ve been invited to join <strong className="text-slate-900">{inviteData?.businessName}</strong>
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -369,7 +382,7 @@ function AcceptInviteContent() {
                                 <Button
                                     type="submit"
                                     disabled={creating}
-                                    className="mt-2 w-full h-[48px] rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold shadow-[0_10px_20px_rgba(230,31,42,0.25)] hover:bg-[#cf1a24] hover:shadow-[0_14px_28px_rgba(230,31,42,0.35)] active:scale-[0.98] transition-all duration-200"
+                                    className="mt-2 w-full h-12 rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold shadow-[0_10px_20px_rgba(230,31,42,0.25)] hover:bg-[#cf1a24] hover:shadow-[0_14px_28px_rgba(230,31,42,0.35)] active:scale-[0.98] transition-all duration-200"
                                     size="lg"
                                 >
                                     {creating ? (
@@ -399,7 +412,7 @@ function AcceptInviteContent() {
                                 </div>
 
                                 <p className="text-xs text-center text-slate-500 pt-2">
-                                    By continuing, you agree to Gusion's Terms of Service
+                                    By continuing, you agree to Gusion&apos;s Terms of Service
                                 </p>
                             </form>
                         </CardContent>
@@ -413,7 +426,7 @@ function AcceptInviteContent() {
 export default function AcceptInvitePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]">
+            <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]">
                 <Loader2 className="w-8 h-8 animate-spin text-[#e61f2a]" />
             </div>
         }>

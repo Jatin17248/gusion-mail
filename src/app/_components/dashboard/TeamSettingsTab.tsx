@@ -205,7 +205,7 @@ export function TeamSettingsTab({ team, userRole, onInvite, onRemove, onCancelIn
                             <Button
                                 onClick={handleInvite}
                                 disabled={inviting || !inviteEmail.trim()}
-                                className="bg-[#0067ff] hover:bg-[#0052cc]"
+                                className="bg-indigo-500 hover:bg-[#0052cc]"
                             >
                                 {inviting ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />

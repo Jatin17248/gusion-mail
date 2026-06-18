@@ -77,7 +77,7 @@ function DesktopNav({ items }: { items: any[] }) {
                   )}
                 </div>
                 <div
-                  className={`absolute left-0 top-full z-50 min-w-[230px] w-[280px] ${openDropdown === idx ? "block" : "hidden"
+                  className={`absolute left-0 top-full z-50 min-w-[230px] w-70 ${openDropdown === idx ? "block" : "hidden"
                     }`}
                 >
                   <DropdownMenu items={item.children} depth={1} />
@@ -138,7 +138,7 @@ function DropdownMenu({ items, depth = 1 }: { items: any[]; depth?: number }) {
                     </span>
                   )}
                 </div>
-                <div className="absolute left-full top-0 z-50 hidden min-w-[260px] group-hover/menu:block group-focus-within/menu:block">
+                <div className="absolute left-full top-0 z-50 hidden min-w-65 group-hover/menu:block group-focus-within/menu:block">
                   <DropdownMenu items={item.children} depth={depth + 1} />
                 </div>
               </>
@@ -273,7 +273,7 @@ export function Header() {
             {/* <ThemeToggle /> */}
 
             {/* Modal Trigger */}
-            <ModalTrigger className="bg-[#0067ff] dark:bg-white dark:text-black text-white flex justify-center group/modal-btn">
+            <ModalTrigger className="bg-indigo-500 dark:bg-white dark:text-black text-white flex justify-center group/modal-btn">
               <span className="group-hover/modal-btn:translate-x-40 text-center transition duration-500">
                 Book a call
               </span>
@@ -320,7 +320,7 @@ export function Header() {
 
             <div className="mt-4 flex w-full flex-col gap-4">
               <ModalTrigger
-                className="bg-[#0067ff] text-white flex justify-center group/modal-btn
+                className="bg-indigo-500 text-white flex justify-center group/modal-btn
                   px-4 py-2 text-center relative overflow-hidden no-underline space-x-2 cursor-pointer transition duration-200 h-14 hover:shadow-2xl rounded-2xl font-semibold w-full"
               >
                 <span className="group-hover/modal-btn:translate-x-125 text-center flex justify-center items-center transition duration-500  ">

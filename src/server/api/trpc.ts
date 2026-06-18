@@ -14,6 +14,7 @@ import { db } from "@/server/db";
 import { auth } from "@/server/auth";
 import { users, organizations, orgMembers } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
+import { env } from "@/env";
 
 /**
  * 1. CONTEXT
@@ -27,20 +28,79 @@ import { eq, and } from "drizzle-orm";
  *
  * @see https://trpc.io/docs/server/context
  */
+function parseCookies(cookieHeader: string | null): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  cookieHeader.split(";").forEach((cookie) => {
+    const parts = cookie.split("=");
+    const name = parts[0]?.trim();
+    const val = parts.slice(1).join("=").trim();
+    if (name) cookies[name] = val;
+  });
+  return cookies;
+}
+
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth();
 
   let org: { id: string; name: string; role: string } | null = null;
+  let isImpersonating = false;
+  let adminUserId: string | null = null;
 
   if (session?.user?.id) {
-    const userId = session.user.id;
-    // 1. Fetch user to check activeOrgId
+    let userId = session.user.id;
+    
+    // Check if user is staff to enable impersonation check
     const dbUser = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
 
     if (dbUser) {
-      let activeOrgId = dbUser.activeOrgId;
+      const adminEmails = env.PRODUCT_ADMIN_EMAILS
+        ? env.PRODUCT_ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase())
+        : [];
+      const isStaff =
+        dbUser.isStaff === true ||
+        (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase()));
+
+      if (isStaff) {
+        const cookies = parseCookies(opts.headers.get("cookie"));
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const impId = cookies["gusion_impersonate_id"];
+        if (impId && impId !== userId) {
+          const targetUser = await db.query.users.findFirst({
+            where: eq(users.id, impId),
+          });
+          if (targetUser) {
+            adminUserId = userId;
+            userId = impId;
+            isImpersonating = true;
+            
+            // Override session.user details for tRPC context
+            session.user = {
+              ...session.user,
+              id: targetUser.id,
+              email: targetUser.email,
+              name: targetUser.name,
+              corsairTenantId: targetUser.corsairTenantId,
+              gmailConnected: targetUser.gmailConnected ?? undefined,
+              calendarConnected: targetUser.calendarConnected ?? undefined,
+              isStaff: false, // Inside context, treat as non-staff to prevent privilege escalation
+              suspendedAt: targetUser.suspendedAt ? targetUser.suspendedAt.toISOString() : null,
+            };
+          }
+        }
+      }
+    }
+
+    // Now proceed with normal activeOrgId / org member retrieval for the active user ID
+    // 1. Fetch user to check activeOrgId
+    const activeUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (activeUser) {
+      let activeOrgId = activeUser.activeOrgId;
       let memberRecord = null;
 
       if (activeOrgId) {
@@ -67,7 +127,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       if (!memberRecord) {
         // No org exists for user, create a default one
         const orgId = crypto.randomUUID();
-        const orgName = `${dbUser.name ?? "Personal"}'s Team`;
+        const orgName = `${activeUser.name ?? "Personal"}'s Team`;
         await db.insert(organizations).values({
           id: orgId,
           name: orgName,
@@ -102,6 +162,8 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
     db,
     session,
     org,
+    isImpersonating,
+    adminUserId,
     ...opts,
   };
 };
@@ -227,3 +289,40 @@ export const requireOrgRole = (roles: ("owner" | "admin" | "member")[]) =>
       },
     });
   });
+
+const isProductAdmin = t.middleware(async ({ next, ctx }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
+  const userId = ctx.adminUserId ?? ctx.session.user.id;
+  const dbUser = await ctx.db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+
+  if (!dbUser) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
+  const adminEmails = env.PRODUCT_ADMIN_EMAILS
+    ? env.PRODUCT_ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase())
+    : [];
+  const isStaff =
+    dbUser.isStaff === true ||
+    (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase()));
+
+  if (!isStaff) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Requires product admin privileges." });
+  }
+
+  return next({
+    ctx: {
+      session: {
+        ...ctx.session,
+        user: { ...ctx.session.user, isStaff: true },
+      },
+    },
+  });
+});
+
+export const productAdminProcedure = protectedProcedure.use(isProductAdmin);

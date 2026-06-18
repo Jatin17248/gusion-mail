@@ -48,7 +48,7 @@ export function AcceptInviteErrorCard({
                             Wrong Email Account
                         </h2>
                         <div className="text-slate-600 dark:text-slate-400 mb-6 space-y-2">
-                            <p>You're currently logged in as:</p>
+                            <p>You&apos;re currently logged in as:</p>
                             <p className="font-semibold text-slate-900 dark:text-white">{currentEmail}</p>
                             <p className="mt-3">But this invitation was sent to:</p>
                             <p className="font-semibold text-slate-900 dark:text-white">{requiredEmail}</p>
@@ -65,7 +65,7 @@ export function AcceptInviteErrorCard({
                                 <Button
                                     onClick={onLogout}
                                     variant="default"
-                                    className="bg-[#0067ff] hover:bg-[#0052cc]"
+                                    className="bg-indigo-500 hover:bg-[#0052cc]"
                                 >
                                     <LogOut className="w-4 h-4 mr-2" />
                                     Logout and Continue
@@ -91,7 +91,7 @@ export function AcceptInviteErrorCard({
                             Please ask the business owner to send a new invitation.
                         </p>
                         <Link href="/login">
-                            <Button className="bg-[#0067ff] hover:bg-[#0052cc]">
+                            <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Back to Login
                             </Button>
                         </Link>
@@ -111,7 +111,7 @@ export function AcceptInviteErrorCard({
                             This invitation has been cancelled by the business owner or is no longer valid.
                         </p>
                         <Link href="/login">
-                            <Button className="bg-[#0067ff] hover:bg-[#0052cc]">
+                            <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Back to Login
                             </Button>
                         </Link>
@@ -128,10 +128,10 @@ export function AcceptInviteErrorCard({
                             Already a Member
                         </h2>
                         <p className="text-slate-600 dark:text-slate-400 mb-6">
-                            You're already a member of this business team.
+                            You&apos;re already a member of this business team.
                         </p>
                         <Link href="/dashboard">
-                            <Button className="bg-[#0067ff] hover:bg-[#0052cc]">
+                            <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Go to Dashboard
                             </Button>
                         </Link>
@@ -148,10 +148,10 @@ export function AcceptInviteErrorCard({
                             You Own This Business
                         </h2>
                         <p className="text-slate-600 dark:text-slate-400 mb-6">
-                            You're already the owner of this business. No invitation needed!
+                            You&apos;re already the owner of this business. No invitation needed!
                         </p>
                         <Link href="/dashboard">
-                            <Button className="bg-[#0067ff] hover:bg-[#0052cc]">
+                            <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Go to Dashboard
                             </Button>
                         </Link>
@@ -173,7 +173,7 @@ export function AcceptInviteErrorCard({
                             This invitation link is invalid or has expired.
                         </p>
                         <Link href="/login">
-                            <Button className="bg-[#0067ff] hover:bg-[#0052cc]">
+                            <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Back to Login
                             </Button>
                         </Link>

@@ -199,7 +199,7 @@ export default function BookPage({ params }: PageProps) {
         <div className="absolute -bottom-[40%] -right-[20%] w-[80%] h-[80%] rounded-full bg-purple-500/5 blur-[120px]" />
       </div>
 
-      <div className="relative max-w-4xl w-full rounded-3xl border border-zinc-800/60 bg-zinc-900/30 backdrop-blur-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[600px]">
+      <div className="relative max-w-4xl w-full rounded-3xl border border-zinc-800/60 bg-zinc-900/30 backdrop-blur-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-150">
         {/* Left side details pane */}
         <div className="md:col-span-5 border-b md:border-b-0 md:border-r border-zinc-800/60 p-6 sm:p-8 flex flex-col justify-between bg-zinc-900/10">
           <div>
@@ -276,7 +276,7 @@ export default function BookPage({ params }: PageProps) {
                   </div>
 
                   {/* Slot grid */}
-                  <div className="flex-1 mt-6 overflow-y-auto max-h-[300px] pr-2 space-y-2">
+                  <div className="flex-1 mt-6 overflow-y-auto max-h-75 pr-2 space-y-2">
                     <AnimatePresence mode="wait">
                       {selectedDateStr && groupedSlots[selectedDateStr] && (
                         <motion.div

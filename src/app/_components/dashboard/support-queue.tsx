@@ -199,7 +199,7 @@ export function TicketsView({
                     value={noteContent}
                     onChange={(e) => setNoteContent(e.target.value)}
                     placeholder="Add an internal note..."
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition min-h-[80px]"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition min-h-20"
                   />
                   <div className="flex justify-end">
                     <button

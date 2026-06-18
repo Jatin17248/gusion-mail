@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { IconMenu2, IconX } from "@tabler/icons-react";
+import { Menu as IconMenu2, X as IconX } from "lucide-react";
 import {
   motion,
   AnimatePresence,
@@ -218,9 +218,9 @@ export const MobileNavToggle = ({
   onClick: () => void;
 }) => {
   return isOpen ? (
-    <IconX onClick={onClick} className="text-[#0067ff]" />
+    <IconX onClick={onClick} className="text-indigo-500" />
   ) : (
-    <IconMenu2 onClick={onClick} className="text-[#0067ff]" />
+    <IconMenu2 onClick={onClick} className="text-indigo-500" />
   );
 };
 
@@ -235,10 +235,11 @@ export const NavbarLogo = () => {
       </h2> */}
       <Image
         className="block h-auto"
-        src={'https://cdn.gusion.omsoftwares.in/images/logo2.svg'}
+        src={'/images/logo2.svg'}
         alt="Gusion"
         width={165}
         height={33}
+        priority
       />
       {/* 
         <Image
@@ -280,7 +281,7 @@ export const NavbarButton = ({
     secondary: "bg-transparent shadow-none dark:text-white",
     dark: "bg-black text-white shadow-[0_0_24px_rgba(34,_42,_53,_0.06),_0_1px_1px_rgba(0,_0,_0,_0.05),_0_0_0_1px_rgba(34,_42,_53,_0.04),_0_0_4px_rgba(34,_42,_53,_0.08),_0_16px_68px_rgba(47,_48,_55,_0.05),_0_1px_0_rgba(255,_255,_255,_0.1)_inset]",
     gradient:
-      "bg-gradient-to-b from-blue-500 to-blue-700 text-white shadow-[0px_2px_0px_0px_rgba(255,255,255,0.3)_inset]",
+      "bg-linear-to-b from-blue-500 to-blue-700 text-white shadow-[0px_2px_0px_0px_rgba(255,255,255,0.3)_inset]",
   };
 
   const finalClass = cn(baseStyles, variantStyles[variant], className);

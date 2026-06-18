@@ -13,6 +13,8 @@ declare module "next-auth" {
       corsairTenantId?: string | null;
       gmailConnected?: boolean;
       calendarConnected?: boolean;
+      isStaff?: boolean;
+      suspendedAt?: string | null;
     } & DefaultSession["user"];
   }
 }
@@ -77,6 +79,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.gmailConnected = dbUser.gmailConnected ?? false;
         token.calendarConnected = dbUser.calendarConnected ?? false;
       }
+      
+      if (token.id) {
+        const dbUser = await db.query.users.findFirst({
+          where: eq(users.id, token.id as string)
+        });
+        if (dbUser) {
+          const adminEmails = env.PRODUCT_ADMIN_EMAILS
+            ? env.PRODUCT_ADMIN_EMAILS.split(",").map(e => e.trim().toLowerCase())
+            : [];
+          token.isStaff = dbUser.isStaff === true || (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) || false;
+          token.suspendedAt = dbUser.suspendedAt ? dbUser.suspendedAt.toISOString() : null;
+        } else {
+          token.isStaff = false;
+          token.suspendedAt = null;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
@@ -85,6 +103,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.corsairTenantId = token.corsairTenantId as string | null | undefined;
         session.user.gmailConnected = token.gmailConnected as boolean | undefined;
         session.user.calendarConnected = token.calendarConnected as boolean | undefined;
+        session.user.isStaff = token.isStaff as boolean | undefined;
+        session.user.suspendedAt = token.suspendedAt as string | null | undefined;
       }
       return session;
     },

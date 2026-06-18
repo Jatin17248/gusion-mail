@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Override indigo shades to use reputation-management brand blue (#0067ff) */
   --color-indigo-50: color-mix(in srgb, #0067ff 5%, white);
@@ -165,3 +167,12 @@ html {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Custom background image utility for auth pages to work around Tailwind v4 unquoted URL parser quirks */
+.auth-banner-bg {
+  background-image: url('/images/login-banner-bg.jpg'), linear-gradient(275deg, rgb(205, 214, 229) 0%, rgb(211, 246, 242) 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+}
+

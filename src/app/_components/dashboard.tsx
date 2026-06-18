@@ -717,7 +717,7 @@ export function Dashboard() {
               <X size={18} />
             </button>
             <h3 className="text-md font-bold text-white mb-4">Keyboard Shortcuts</h3>
-            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            <div className="space-y-3 max-h-75 overflow-y-auto">
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Move list focus down</span>
                 <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">j</kbd>
@@ -1448,7 +1448,7 @@ function SettingsView() {
               <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 flex flex-col justify-between">
                 <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Share Link</span>
                 <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-zinc-400 truncate max-w-[80px]">gusion-mail.com/?ref=...</span>
+                  <span className="text-xs text-zinc-400 truncate max-w-20">gusion-mail.com/?ref=...</span>
                   <button
                     onClick={handleCopyLink}
                     className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition cursor-pointer"
@@ -1516,10 +1516,10 @@ function SettingsView() {
               {!refStats?.invites || refStats.invites.length === 0 ? (
                 <p className="text-[11px] text-zinc-500 italic">No invites sent yet.</p>
               ) : (
-                <div className="max-h-[150px] overflow-y-auto border border-zinc-855 rounded-lg divide-y divide-zinc-900">
+                <div className="max-h-37.5 overflow-y-auto border border-zinc-855 rounded-lg divide-y divide-zinc-900">
                   {refStats.invites.map((invite) => (
                     <div key={invite.id} className="p-2.5 flex items-center justify-between text-xs bg-zinc-950/20">
-                      <span className="text-zinc-300 font-medium truncate max-w-[180px]">{invite.referredEmail}</span>
+                      <span className="text-zinc-300 font-medium truncate max-w-45">{invite.referredEmail}</span>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                           invite.status === "rewarded"
@@ -1609,7 +1609,7 @@ function SettingsView() {
               {!links || links.length === 0 ? (
                 <p className="text-[11px] text-zinc-500 italic text-left">No scheduling links configured.</p>
               ) : (
-                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                <div className="space-y-2 max-h-55 overflow-y-auto">
                   {links.map((link) => (
                     <div key={link.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
                       <div className="min-w-0 text-left">
@@ -1701,7 +1701,7 @@ function SettingsView() {
               {!contactsData || contactsData.length === 0 ? (
                 <p className="text-[11px] text-zinc-500 italic text-left">No contacts found.</p>
               ) : (
-                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                <div className="space-y-2 max-h-55 overflow-y-auto">
                   {contactsData.map((contact) => (
                     <div key={contact.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
                       <div className="min-w-0 text-left">
@@ -1780,7 +1780,7 @@ function SettingsView() {
               {!orgMembersList || orgMembersList.length === 0 ? (
                 <p className="text-[11px] text-zinc-500 italic text-left">No team members found.</p>
               ) : (
-                <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                <div className="space-y-2 max-h-55 overflow-y-auto">
                   {orgMembersList.map((member) => (
                     <div key={member.id} className="p-3 rounded-lg border border-zinc-855 bg-zinc-950/40 flex items-center justify-between gap-4">
                       <div className="min-w-0 text-left">

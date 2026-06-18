@@ -24,6 +24,7 @@ export const env = createEnv({
     CORSAIR_WEBHOOK_SECRET: z.string().optional(),
     CRON_SECRET: z.string().optional(),
     SENTRY_DSN: z.string().optional(),
+    PRODUCT_ADMIN_EMAILS: z.string().optional(),
   },
 
   /**
@@ -56,6 +57,7 @@ export const env = createEnv({
     CORSAIR_WEBHOOK_SECRET: process.env.CORSAIR_WEBHOOK_SECRET,
     CRON_SECRET: process.env.CRON_SECRET,
     SENTRY_DSN: process.env.SENTRY_DSN,
+    PRODUCT_ADMIN_EMAILS: process.env.PRODUCT_ADMIN_EMAILS,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },

@@ -5,8 +5,8 @@ export function Landing() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-zinc-950 flex flex-col justify-between">
       {/* Background radial glows */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-125 h-125 bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-150 h-150 bg-violet-600/10 rounded-full blur-37.5 pointer-events-none" />
 
       {/* Header */}
       <header className="container mx-auto px-6 py-6 flex items-center justify-between border-b border-zinc-900">

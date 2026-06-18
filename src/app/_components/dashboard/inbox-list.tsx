@@ -55,7 +55,7 @@ export function InboxList({
   });
 
   return (
-    <section className="w-[420px] shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
+    <section className="w-105 shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
       {/* Header search / action */}
       <div className="p-4 border-b border-zinc-900 space-y-3">
         <div className="flex items-center justify-between">
@@ -221,7 +221,7 @@ export function InboxList({
               <div className={`transition-all ${selectedEmailIds.size > 0 || selectedEmailIds.has(email.id) ? "pl-5" : "group-hover:pl-5"}`}>
                 <div className="flex justify-between items-start gap-2 mb-1">
                 <div className="flex items-center gap-2 truncate">
-                  <span className="text-xs font-semibold text-zinc-300 truncate max-w-[150px]">
+                  <span className="text-xs font-semibold text-zinc-300 truncate max-w-37.5">
                     {parseEmailAddress(email.from).name || parseEmailAddress(email.from).email}
                   </span>
                   {email.priority && email.priority !== "normal" && (

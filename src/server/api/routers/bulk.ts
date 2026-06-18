@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, orgProcedure } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { bulkCampaigns, bulkRecipients, suppressionList, users } from "@/server/db/schema";
+import { bulkCampaigns, bulkRecipients, suppressionList, users, systemConfigs } from "@/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -28,6 +28,17 @@ export const bulkRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Check if bulk campaigns are disabled globally
+      const disableBulkConfig = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "disableBulkSend"),
+      });
+      if (disableBulkConfig && JSON.parse(disableBulkConfig.value) === true) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bulk campaign sending is temporarily disabled by the platform administrator.",
+        });
+      }
+
       // Find a user in the org who has gmail connected to send from
       const connectedUser = await db.query.users.findFirst({
         where: eq(users.id, ctx.session.user.id),
@@ -79,6 +90,17 @@ export const bulkRouter = createTRPCRouter({
   startCampaign: orgProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
+      // Check if bulk campaigns are disabled globally
+      const disableBulkConfig = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "disableBulkSend"),
+      });
+      if (disableBulkConfig && JSON.parse(disableBulkConfig.value) === true) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Bulk campaign sending is temporarily disabled by the platform administrator.",
+        });
+      }
+
       const campaign = await db.query.bulkCampaigns.findFirst({
         where: and(eq(bulkCampaigns.id, input.id), eq(bulkCampaigns.orgId, ctx.org.id)),
       });

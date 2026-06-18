@@ -209,7 +209,7 @@ function InboxSimulator() {
   }, [selectedMailIndex, activeMail]);
 
   return (
-    <div className="relative w-full max-w-[620px] p-6 sm:p-10 font-sans">
+    <div className="relative w-full max-w-155 p-6 sm:p-10 font-sans">
       
       {/* Mockup Window Wrapper (with overflow-hidden) */}
       <div className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -247,7 +247,7 @@ function InboxSimulator() {
                     }`}
                   >
                     <div className="flex justify-between items-baseline mb-0.5">
-                      <span className={`text-[10px] font-semibold truncate max-w-[80px] ${isSelected ? "text-indigo-400" : "text-zinc-350"}`}>
+                      <span className={`text-[10px] font-semibold truncate max-w-20 ${isSelected ? "text-indigo-400" : "text-zinc-350"}`}>
                         {mail.sender}
                       </span>
                       <span className="text-[8px] text-zinc-500">{mail.time}</span>
@@ -363,7 +363,7 @@ function InboxSimulator() {
         </div>
       </div>
 
-      <div className="absolute -bottom-4 -left-4 w-[160px] bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob3 z-20 hover:scale-105 transition-transform hidden sm:block">
+      <div className="absolute -bottom-4 -left-4 w-40 bg-zinc-950/95 border border-zinc-850 rounded-xl p-3 shadow-2xl animate-bob3 z-20 hover:scale-105 transition-transform hidden sm:block">
         <div className="flex items-center gap-1.5 mb-1">
           <Keyboard size={11} className="text-indigo-400" />
           <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Shortcuts</span>
@@ -496,7 +496,7 @@ export function NewLanding() {
               client for <span className="text-indigo-600 italic">high-growth</span> teams.
             </h1>
 
-            <p className="text-base sm:text-lg text-zinc-500 leading-relaxed max-w-[540px] mb-8 font-normal">
+            <p className="text-base sm:text-lg text-zinc-500 leading-relaxed max-w-135 mb-8 font-normal">
               Gusion Mail syncs with Gmail and Workspace to deliver speed. Draft complete replies in seconds, summarize long threads automatically, and manage contacts seamlessly in a beautiful, light interface.
             </p>
 
@@ -584,7 +584,7 @@ export function NewLanding() {
                 <span className="text-3xl sm:text-4xl font-extrabold text-[#012b57] tracking-tight mb-1">
                   {stat.value}
                 </span>
-                <span className="text-xs text-zinc-500 leading-normal max-w-[160px]">
+                <span className="text-xs text-zinc-500 leading-normal max-w-40">
                   {stat.label}
                 </span>
               </div>
@@ -647,7 +647,7 @@ export function NewLanding() {
           </div>
 
           {/* Grid Template Areas styled via CSS grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[200px]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-50">
             
             {/* Tile 1 — Command Palette */}
             <div className="md:col-span-2 bg-[#012b57] text-white rounded-2xl p-6 flex flex-col justify-between overflow-hidden relative shadow-lg">
@@ -661,7 +661,7 @@ export function NewLanding() {
                   Control all settings, accounts, rules, and AI parameters instantly. Press J/K keys to scroll through threads.
                 </p>
               </div>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 flex items-center gap-2 font-mono text-[9px] text-zinc-300 max-w-[280px]">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 flex items-center gap-2 font-mono text-[9px] text-zinc-300 max-w-70">
                 <Command size={11} className="text-indigo-400" />
                 <span>type <b className="text-white">&quot;brief&quot;</b> to compile summaries</span>
               </div>
@@ -743,7 +743,7 @@ export function NewLanding() {
                 1
               </div>
               <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Google Secure Sign-In</h3>
-              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-60 font-normal">
                 Authenticate securely using Gmail OAuth scopes. We never store credentials locally.
               </p>
             </div>
@@ -754,7 +754,7 @@ export function NewLanding() {
                 2
               </div>
               <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Configure Workspace Rules</h3>
-              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-60 font-normal">
                 Set up priority categories and define AI tone settings (formal, casual, concise).
               </p>
             </div>
@@ -765,7 +765,7 @@ export function NewLanding() {
                 3
               </div>
               <h3 className="text-sm sm:text-base font-bold text-zinc-850 mb-2">Navigate 10x Faster</h3>
-              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-[240px] font-normal">
+              <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-60 font-normal">
                 Manage correspondence instantly using command palettes and contextual drafts.
               </p>
             </div>
@@ -1030,7 +1030,7 @@ export function NewLanding() {
       {/* ─── FOOTER ─── */}
       <footer className="border-t-[3px] border-[#fff2e0] py-4 relative overflow-hidden bg-[#fff2e0]">
         {/* Red/Blue Divider Line */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-[#e61f2a] via-[#0067ff] to-[#e61f2a]" />
+        <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-[#e61f2a] via-indigo-500 to-[#e61f2a]" />
         
         <div className="max-w-[1280px] mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 py-10 text-xs sm:text-sm text-zinc-500">
           {/* Logo Column */}
@@ -1040,7 +1040,7 @@ export function NewLanding() {
               <Image src="/logo2.svg" alt="Gusion Mail Logo" width="150" height="34" priority />
               <span className="text-red-600 -top-4.5 relative text-base font-medium -ml-1">Mail</span>
             </Link>
-            <p className="text-xs text-zinc-500 leading-relaxed font-normal max-w-[200px]">
+            <p className="text-xs text-zinc-500 leading-relaxed font-normal max-w-50">
               The secure, keyboard-first AI email workspace built for modern professionals.
             </p>
           </div>
@@ -1075,7 +1075,7 @@ export function NewLanding() {
             </p>
             <button
               onClick={() => signIn("google")}
-              className="inline-flex items-center gap-1 bg-[#0067ff] hover:bg-[#0052cc] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition cursor-pointer"
+              className="inline-flex items-center gap-1 bg-indigo-500 hover:bg-[#0052cc] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition cursor-pointer"
             >
               <span>Book Enterprise Demo</span>
               <ExternalLink size={10} />

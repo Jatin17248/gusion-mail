@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input2";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,17 +13,30 @@ import { UserPlus } from "lucide-react";
 import RightFormRotations from "./RightFormRotations";
 
 const ForgotPasswordForm = () => {
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    const hadDark = htmlElement.classList.contains("dark");
+    if (hadDark) {
+      htmlElement.classList.remove("dark");
+    }
+    return () => {
+      if (hadDark) {
+        htmlElement.classList.add("dark");
+      }
+    };
+  }, []);
+
   return (
     <>
       <div className="min-h-screen relative overflow-hidden bg-[#fff2e0]">
         {/* Warm gradient wash */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
+        <div className="absolute inset-0 bg-linear-to-b from-[#fffaf5] via-[#fff2e0] to-[#ffe0d3]" />
 
         {/* Color blobs + glass orbit */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
           <div className="absolute -top-24 -left-20 h-80 w-80 rounded-full bg-[#e61f2a]/18 blur-3xl" />
-          <div className="absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-[#0067ff]/16 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 h-[22rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
+          <div className="absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-indigo-500/16 blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 h-88 w-160 -translate-x-1/2 -translate-y-1/2 rounded-[999px] border border-white/50 bg-white/10 backdrop-blur-3xl" />
         </div>
 
         {/* Main content */}
@@ -32,7 +45,7 @@ const ForgotPasswordForm = () => {
             layoutId="auth-container"
             className="w-full max-w-5xl grid items-center lg:grid-cols-[minmax(0,1fr)_1.15fr]
         rounded-[30px] 
-        bg-[url('https://cdn.gusion.omsoftwares.in/images/login-banner-bg.jpg')] bg-[linear-gradient(275deg,_rgb(205,214,229)_0%,_rgb(211,246,242)_100%)] bg-no-repeat bg-cover bg-center
+        auth-banner-bg
         shadow-2xl overflow-hidden
         "
           >
@@ -166,11 +179,11 @@ const ForgotPassword = () => {
           type="submit"
           size="lg"
           disabled={isLoading}
-          className="mt-2 w-full h-[48px] rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold
+          className="mt-2 w-full h-12 rounded-2xl bg-[#e61f2a] text-white text-[15px] font-semibold
                       shadow-[0_10px_20px_rgba(230,31,42,0.25)] hover:bg-[#cf1a24] hover:shadow-[0_14px_28px_rgba(230,31,42,0.35)] 
                       active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="relative top-[-1px]">
+          <span className="relative -top-px">
             {isLoading ? "Sending..." : "Send Reset Link"}
           </span>
         </Button>

@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { apiKeys } from "@/server/db/schema";
+import { apiKeys, systemConfigs } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -16,6 +16,14 @@ export async function validateApiKey(
   apiKeyHeader: string | null,
 ): Promise<ApiKeyAuth | null> {
   if (!apiKeyHeader) return null;
+
+  // Check if API is disabled globally
+  const apiDisabledConfig = await db.query.systemConfigs.findFirst({
+    where: eq(systemConfigs.key, "disableApi"),
+  });
+  if (apiDisabledConfig && JSON.parse(apiDisabledConfig.value) === true) {
+    return null;
+  }
 
   const token = apiKeyHeader.startsWith("Bearer ")
     ? apiKeyHeader.substring(7).trim()

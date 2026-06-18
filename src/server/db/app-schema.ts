@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   passwordResetToken: text("password_reset_token"),
   passwordResetTokenExpiry: timestamp("password_reset_token_expiry", { mode: "date" }),
+  isStaff: boolean("is_staff").default(false).notNull(),
+  suspendedAt: timestamp("suspended_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
@@ -449,4 +451,11 @@ export const teamInvitations = pgTable("team_invitations", {
   status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'expired'
   expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const systemConfigs = pgTable("system_configs", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  updatedByUserId: text("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
 });
