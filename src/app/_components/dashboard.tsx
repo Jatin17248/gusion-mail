@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useEffectEvent } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { signOut, signIn, useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
@@ -497,9 +497,6 @@ export function Dashboard() {
   });
 
   const syncedCalendarWeeks = useRef(new Set<string>());
-  const triggerCalendarSync = useEffectEvent((range: { weekStart: string; weekEnd: string }) => {
-    refreshEvents.mutate(range);
-  });
 
   useEffect(() => {
     if (activeTab !== "calendar") return;
@@ -508,11 +505,11 @@ export function Dashboard() {
     if (syncedCalendarWeeks.current.has(weekKey)) return;
 
     syncedCalendarWeeks.current.add(weekKey);
-    triggerCalendarSync({
+    refreshEvents.mutate({
       weekStart: weekRange.start,
       weekEnd: weekRange.end,
     });
-  }, [activeTab, triggerCalendarSync, weekRange.end, weekRange.start]);
+  }, [activeTab, refreshEvents, weekRange.end, weekRange.start]);
 
   // Keyboard Navigation Focus State
   const [focusedIndex, setFocusedIndex] = useState(0);
