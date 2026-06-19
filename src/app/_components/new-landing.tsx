@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import FooterFixed from "@/components/FooterFixed";
+import Footer from "@/components/Footer";
 import {
   Keyboard,
   Cpu,
@@ -390,7 +390,7 @@ export function NewLanding() {
       <Hero />
 
       {/* ─── TRUSTED LOGO MARQUEE ─── */}
-      <section className="bg-[#fff2e0] border-y border-zinc-150 py-10 overflow-hidden">
+      <section className="bg-[#fff2e0] py-10 overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-[0.15em] mb-5">
             BUILT WITH COMPATIBILITY IN MIND
@@ -866,7 +866,7 @@ export function NewLanding() {
         </div>
       </section>
 
-      <FooterFixed />
+      <Footer />
     </div>
   );
 }

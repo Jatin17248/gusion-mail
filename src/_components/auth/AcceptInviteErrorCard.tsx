@@ -55,7 +55,7 @@ export function AcceptInviteErrorCard({
                             <p className="mt-3 text-sm">Please logout and login with the correct email address to accept this invitation.</p>
                         </div>
                         <div className="flex gap-3 justify-center">
-                            <Link href="/dashboard">
+                            <Link href="/">
                                 <Button variant="ghost">
                                     <ArrowLeft className="w-4 h-4 mr-2" />
                                     Back to Dashboard
@@ -130,7 +130,7 @@ export function AcceptInviteErrorCard({
                         <p className="text-slate-600 dark:text-slate-400 mb-6">
                             You&apos;re already a member of this business team.
                         </p>
-                        <Link href="/dashboard">
+                        <Link href="/">
                             <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Go to Dashboard
                             </Button>
@@ -150,7 +150,7 @@ export function AcceptInviteErrorCard({
                         <p className="text-slate-600 dark:text-slate-400 mb-6">
                             You&apos;re already the owner of this business. No invitation needed!
                         </p>
-                        <Link href="/dashboard">
+                        <Link href="/">
                             <Button className="bg-indigo-500 hover:bg-[#0052cc]">
                                 Go to Dashboard
                             </Button>

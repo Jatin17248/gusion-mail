@@ -241,7 +241,7 @@ const RegisterForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            onClick={() => signIn("google", { callbackUrl: "/" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign up with Google"
           >
@@ -251,7 +251,7 @@ const RegisterForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
+            onClick={() => signIn("facebook", { callbackUrl: "/" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign up with Meta"
           >

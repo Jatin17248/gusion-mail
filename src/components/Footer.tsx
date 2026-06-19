@@ -96,7 +96,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
                   { title: "Blogs", link: "/blog" },
                   { title: "Help Center", link: "/contact" },
                   { title: "Support Email", link: "mailto:jatin@omsoftwares.in" },
-                  { title: "Business Email", link: "mailto:sales@omsoftwares.in" },
+                  { title: "Business Email", link: "mailto:jatin@omsoftwares.in" },
                 ].map((item) => (
                   <Link
                     key={item.title}
@@ -121,10 +121,10 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
                 <Link href="/terms" className="text-gray-600 hover:text-black hover:underline">
                   Terms of Service
                 </Link>
-                <Link href="/refund" className="text-gray-600 hover:text-black hover:underline">
+                <Link href="/terms" className="text-gray-600 hover:text-black hover:underline">
                   Cancellation and Refund
                 </Link>
-                <Link href="/shipping" className="text-gray-600 hover:text-black hover:underline">
+                <Link href="/terms" className="text-gray-600 hover:text-black hover:underline">
                   Shipping and Exchange
                 </Link>
               </div>
@@ -136,7 +136,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
             <div className="flex gap-2 flex-col">
               <div className="flex gap-2.5 flex-col mt-1">
                 {[
-                  { title: "Dashboard", link: "/dashboard" },
+                  { title: "Dashboard", link: "/" },
                   { title: "Sign In", link: "/login" },
                   { title: "Sign Up", link: "/register" },
                   { title: "Features", link: "/#features" },

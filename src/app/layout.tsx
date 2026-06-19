@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { SuspendedView } from "@/components/suspended-view";
 import { MaintenanceView } from "@/components/maintenance-view";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
+import { unstable_rethrow } from "next/navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +26,7 @@ async function getSafeSession() {
   try {
     return await auth();
   } catch (error) {
+    unstable_rethrow(error);
     console.error("[layout] Failed to load session:", error);
     return null;
   }
@@ -74,6 +76,7 @@ async function getLayoutState(sessionUserId?: string) {
         }
       }
     } catch (error) {
+      unstable_rethrow(error);
       console.error("[layout] Failed to load user state:", error);
     }
   }

@@ -122,7 +122,7 @@ function AcceptInviteContent() {
 
             setSuccess(true);
             toast.success(`You've joined ${data.businessName}!`);
-            setTimeout(() => router.push("/dashboard"), 1500);
+            setTimeout(() => router.push("/"), 1500);
         } catch (err) {
             toast.error("Failed to join team");
         }
@@ -158,7 +158,7 @@ function AcceptInviteContent() {
                 email: inviteData?.email,
                 password: formData.password,
                 redirect: true,
-                callbackUrl: "/dashboard"
+                callbackUrl: "/"
             });
 
             // Note: If redirect is true, code below won't execute
