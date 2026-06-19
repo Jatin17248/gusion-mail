@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+
 import { type Metadata } from "next";
 import { Inter } from "next/font/google";
 import { TRPCReactProvider } from "@/trpc/react";
@@ -17,7 +18,6 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Gusion Mail — AI Command Center",
   description: "Keyboard-first Gmail & Calendar command center powered by AI.",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
   manifest: "/manifest.json",
 };
 
