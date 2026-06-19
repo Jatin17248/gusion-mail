@@ -5,16 +5,45 @@ import { X, CheckCircle2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 const TUTORIAL_STEPS = [
-  { key: "j", label: "Press 'j' to move down" },
-  { key: "k", label: "Press 'k' to move up" },
-  { key: "c", label: "Press 'c' to compose an email" },
-  { key: "/", label: "Press '/' to search or run commands" },
+  { key: "Cmd+ArrowDown", macLabel: "⌘↓", winLabel: "Ctrl+↓", desc: "move list focus down" },
+  { key: "Cmd+ArrowUp", macLabel: "⌘↑", winLabel: "Ctrl+↑", desc: "move list focus up" },
+  { key: "Cmd+Alt+N", macLabel: "⌘⌥N", winLabel: "Ctrl+Alt+N", desc: "compose new email" },
+  { key: "Cmd+K", macLabel: "⌘K", winLabel: "Ctrl+K", desc: "open command palette" },
 ];
+
+function matchShortcut(declaration: string, e: KeyboardEvent): boolean {
+  const parts = declaration.split("+");
+  const mainKey = parts[parts.length - 1];
+  if (!mainKey) return false;
+
+  const requiresCmdOrCtrl = parts.some(
+    (p) => p.toLowerCase() === "cmd" || p.toLowerCase() === "ctrl"
+  );
+  const requiresShift = parts.some((p) => p.toLowerCase() === "shift");
+  const requiresAlt = parts.some((p) => p.toLowerCase() === "alt");
+
+  const hasCmdOrCtrl = e.metaKey || e.ctrlKey;
+  const hasShift = e.shiftKey;
+  const hasAlt = e.altKey;
+
+  if (requiresCmdOrCtrl !== hasCmdOrCtrl) return false;
+  if (requiresShift !== hasShift) return false;
+  if (requiresAlt !== hasAlt) return false;
+
+  return mainKey.toLowerCase() === e.key.toLowerCase();
+}
 
 export function ShortcutTutorial() {
   const { data: session } = useSession();
   const [isVisible, setIsVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [isMac, setIsMac] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsMac(/Mac|iPod|iPad|iPhone/.test(window.navigator.userAgent));
+    }
+  }, []);
 
   useEffect(() => {
     // Only show if user is logged in
@@ -40,7 +69,8 @@ export function ShortcutTutorial() {
       }
 
       if (currentStep < TUTORIAL_STEPS.length) {
-        if (e.key.toLowerCase() === TUTORIAL_STEPS[currentStep]?.key) {
+        const step = TUTORIAL_STEPS[currentStep];
+        if (step && matchShortcut(step.key, e)) {
           setCurrentStep((prev) => prev + 1);
         }
       }
@@ -86,6 +116,7 @@ export function ShortcutTutorial() {
             {TUTORIAL_STEPS.map((step, idx) => {
               const isPast = idx < currentStep;
               const isActive = idx === currentStep;
+              const stepKeyLabel = isMac ? step.macLabel : step.winLabel;
               
               return (
                 <div 
@@ -94,17 +125,17 @@ export function ShortcutTutorial() {
                     isPast ? "opacity-40" : isActive ? "opacity-100 transform translate-x-1" : "opacity-30"
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold border ${
+                  <div className={`px-2 min-w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border ${
                     isPast 
                       ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50" 
                       : isActive 
                         ? "bg-indigo-600 text-white border-indigo-500 shadow-[0_0_10px_rgba(79,70,229,0.5)]" 
                         : "bg-zinc-900 text-zinc-500 border-zinc-800"
                   }`}>
-                    {isPast ? <CheckCircle2 size={12} /> : step.key}
+                    {isPast ? <CheckCircle2 size={12} /> : stepKeyLabel}
                   </div>
                   <span className={`text-xs font-medium ${isActive ? "text-indigo-200" : "text-zinc-400"}`}>
-                    {step.label}
+                    Press {stepKeyLabel} to {step.desc}
                   </span>
                 </div>
               );
@@ -118,7 +149,7 @@ export function ShortcutTutorial() {
           </div>
           <h4 className="text-sm font-bold text-emerald-400">You&apos;re a pro!</h4>
           <p className="text-xs text-zinc-400">
-            Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300">?</kbd> anytime to see all shortcuts.
+            Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300">{isMac ? "⌘ /" : "Ctrl+/"}</kbd> anytime to see all shortcuts.
           </p>
         </div>
       )}

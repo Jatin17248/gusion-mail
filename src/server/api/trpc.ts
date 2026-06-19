@@ -41,7 +41,10 @@ function parseCookies(cookieHeader: string | null): Record<string, string> {
 }
 
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const session = await auth();
+  let session = await auth().catch((err: unknown) => {
+    console.error("[trpc ctx] auth() failed:", err);
+    return null;
+  });
 
   let org: { id: string; name: string; role: string } | null = null;
   let isImpersonating = false;
@@ -49,7 +52,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 
   if (session?.user?.id) {
     let userId = session.user.id;
-    
+
     // Check if user is staff to enable impersonation check
     const dbUser = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -98,60 +101,63 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 
     // Now proceed with normal activeOrgId / org member retrieval for the active user ID
     if (activeUser) {
-      let activeOrgId = activeUser.activeOrgId;
-      let memberRecord = null;
+      try {
+        let activeOrgId = activeUser.activeOrgId;
+        let memberRecord = null;
 
-      if (activeOrgId) {
-        memberRecord = await db.query.orgMembers.findFirst({
-          where: and(
-            eq(orgMembers.userId, userId),
-            eq(orgMembers.orgId, activeOrgId)
-          ),
-        });
-      }
-
-      if (!memberRecord) {
-        // Fallback to first org they are member of
-        memberRecord = await db.query.orgMembers.findFirst({
-          where: eq(orgMembers.userId, userId),
-        });
-        if (memberRecord) {
-          activeOrgId = memberRecord.orgId;
-          // Save activeOrgId
-          await db.update(users).set({ activeOrgId }).where(eq(users.id, userId));
+        if (activeOrgId) {
+          memberRecord = await db.query.orgMembers.findFirst({
+            where: and(
+              eq(orgMembers.userId, userId),
+              eq(orgMembers.orgId, activeOrgId)
+            ),
+          });
         }
-      }
 
-      if (!memberRecord) {
-        // No org exists for user, create a default one
-        const orgId = crypto.randomUUID();
-        const orgName = `${activeUser.name ?? "Personal"}'s Team`;
-        await db.insert(organizations).values({
-          id: orgId,
-          name: orgName,
-        });
-        await db.insert(orgMembers).values({
-          orgId,
-          userId,
-          role: "owner",
-        });
-        await db.update(users).set({ activeOrgId: orgId }).where(eq(users.id, userId));
-
-        activeOrgId = orgId;
-        memberRecord = { orgId, userId, role: "owner" };
-      }
-
-      if (activeOrgId && memberRecord) {
-        const dbOrg = await db.query.organizations.findFirst({
-          where: eq(organizations.id, activeOrgId),
-        });
-        if (dbOrg) {
-          org = {
-            id: dbOrg.id,
-            name: dbOrg.name,
-            role: memberRecord.role,
-          };
+        if (!memberRecord) {
+          // Fallback to first org they are member of
+          memberRecord = await db.query.orgMembers.findFirst({
+            where: eq(orgMembers.userId, userId),
+          });
+          if (memberRecord) {
+            activeOrgId = memberRecord.orgId;
+            await db.update(users).set({ activeOrgId }).where(eq(users.id, userId));
+          }
         }
+
+        if (!memberRecord) {
+          // No org exists for user, create a default one
+          const orgId = crypto.randomUUID();
+          const orgName = `${activeUser.name ?? "Personal"}'s Team`;
+          await db.insert(organizations).values({
+            id: orgId,
+            name: orgName,
+          });
+          await db.insert(orgMembers).values({
+            orgId,
+            userId,
+            role: "owner",
+          });
+          await db.update(users).set({ activeOrgId: orgId }).where(eq(users.id, userId));
+
+          activeOrgId = orgId;
+          memberRecord = { orgId, userId, role: "owner" };
+        }
+
+        if (activeOrgId && memberRecord) {
+          const dbOrg = await db.query.organizations.findFirst({
+            where: eq(organizations.id, activeOrgId),
+          });
+          if (dbOrg) {
+            org = {
+              id: dbOrg.id,
+              name: dbOrg.name,
+              role: memberRecord.role,
+            };
+          }
+        }
+      } catch (err) {
+        console.error("[trpc ctx] org lookup failed, continuing without org:", err);
       }
     }
   }

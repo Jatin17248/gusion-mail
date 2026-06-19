@@ -14,16 +14,22 @@ import { TemplatesSettingsView } from "@/app/_components/templates-settings";
 import { ContactsSidePanel } from "@/app/_components/contacts-panel";
 import { ShortcutTutorial } from "@/app/_components/shortcut-tutorial";
 import { Sidebar } from "@/app/_components/dashboard/sidebar";
-import { InboxList } from "@/app/_components/dashboard/inbox-list";
 import { ReadingPane } from "@/app/_components/dashboard/reading-pane";
 import { CalendarView } from "@/app/_components/dashboard/calendar-view";
 import { TicketsView } from "@/app/_components/dashboard/support-queue";
 import { SubscriptionManager } from "@/app/_components/subscription-manager";
 import { ConnectedAccountsSettings } from "@/app/_components/connected-accounts-settings";
+import { CommandCenter } from "@/app/_components/dashboard/command-center";
+import { MiniCalendarWidget } from "@/app/_components/dashboard/mini-calendar-widget";
+import { EmailSidePanel } from "@/app/_components/dashboard/email-sidebar-panel";
+import { InboxList } from "@/app/_components/dashboard/inbox-list";
 
 export function formatMessageDate(dateStr: string | null) {
   if (!dateStr) return "";
-  const date = new Date(dateStr);
+  // internalDate from Gmail is a ms-since-epoch string (e.g. "1718739600000")
+  const ms = Number(dateStr);
+  const date = isNaN(ms) ? new Date(dateStr) : new Date(ms);
+  if (isNaN(date.getTime())) return "";
   const now = new Date();
   const isToday = date.toDateString() === now.toDateString();
   return isToday
@@ -142,7 +148,7 @@ import {
 export function Dashboard() {
   const { data: session } = useSession();
   const utils = api.useUtils();
-  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "settings" | "tickets" | "bulk">("gmail");
+  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "settings" | "tickets" | "bulk" | "inbox">("gmail");
   const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,6 +157,13 @@ export function Dashboard() {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [isMac, setIsMac] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsMac(/Mac|iPod|iPad|iPhone/.test(window.navigator.userAgent));
+    }
+  }, []);
 
   // Compose state
   const [composeTo, setComposeTo] = useState("");
@@ -296,7 +309,7 @@ export function Dashboard() {
   // Gmail queries/mutations
   const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
     { query: debouncedSearch, limit: 30, tab: inboxTab },
-    { enabled: activeTab === "gmail", retry: false }
+    { enabled: activeTab === "gmail" || activeTab === "inbox", retry: false }
   );
 
   const { data: selectedMessage, isLoading: messageLoading } = api.gmail.getMessage.useQuery(
@@ -700,44 +713,40 @@ export function Dashboard() {
 
   // Keyboard Shortcuts bindings
   useShortcuts({
-    j: () => {
+    "Cmd+ArrowDown": () => {
       if (activeTab === "gmail" && emails && focusedIndex < emails.length - 1) {
         setFocusedIndex((prev) => prev + 1);
       }
     },
-    k: () => {
+    "Cmd+ArrowUp": () => {
       if (activeTab === "gmail" && focusedIndex > 0) {
         setFocusedIndex((prev) => prev - 1);
       }
     },
-    Enter: () => {
+    "Cmd+Enter": () => {
       if (activeTab === "gmail" && emails?.[focusedIndex]) {
         setActiveMessageId(emails[focusedIndex].id);
         // Mark as read
         markRead.mutate({ id: emails[focusedIndex].id, read: true });
       }
     },
-    e: () => {
+    "Cmd+Shift+E": () => {
       if (activeTab === "gmail" && emails?.[focusedIndex]) {
         archiveEmail.mutate({ id: emails[focusedIndex].id });
       }
     },
-    u: () => {
+    "Cmd+Shift+U": () => {
       if (activeTab === "gmail" && emails?.[focusedIndex]) {
         // Toggle read/unread (since we don't have current read state readily in list, we toggle)
         markRead.mutate({ id: emails[focusedIndex].id, read: false });
         toast.info("Marked as unread");
       }
     },
-    c: (e) => {
+    "Cmd+Alt+N": (e) => {
       e.preventDefault();
       setComposeOpen(true);
     },
-    "/": (e) => {
-      e.preventDefault();
-      setCommandPaletteOpen(true);
-    },
-    r: (e) => {
+    "Cmd+Alt+R": (e) => {
       e.preventDefault();
       if (selectedMessage) {
         const replyInput = document.getElementById("reply-input");
@@ -751,10 +760,13 @@ export function Dashboard() {
       setShortcutHelpOpen(false);
       setAgentOpen(false);
     },
-    "g i": () => setActiveTab("gmail"),
-    "g c": () => setActiveTab("calendar"),
-    "g s": () => setActiveTab("settings"),
-    "?": () => setShortcutHelpOpen((prev) => !prev),
+    "Cmd+Alt+I": () => setActiveTab("gmail"),
+    "Cmd+Alt+C": () => setActiveTab("calendar"),
+    "Cmd+Alt+S": () => setActiveTab("settings"),
+    "Cmd+/": (e) => {
+      e.preventDefault();
+      setShortcutHelpOpen((prev) => !prev);
+    },
     "Cmd+K": (e) => {
       e.preventDefault();
       setCommandPaletteOpen((prev) => !prev);
@@ -819,8 +831,60 @@ export function Dashboard() {
       {/* Main workspace (tabs) */}
       <div className="flex-1 flex overflow-hidden">
         {activeTab === "gmail" && (
-          <>
-            {/* 2nd Pane: Email List */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Center column: AI Command Center OR Reading Pane */}
+            {activeMessageId ? (
+              <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+                {/* Back to AI bar */}
+                <div className="px-4 py-2 border-b border-zinc-900 flex items-center gap-2 shrink-0 bg-zinc-950">
+                  <button
+                    onClick={() => setActiveMessageId(null)}
+                    className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                  >
+                    <ChevronLeft size={14} />
+                    Back to AI
+                  </button>
+                </div>
+                <ReadingPane
+                  messageLoading={messageLoading}
+                  selectedMessage={selectedMessage}
+                  dailyBriefData={dailyBriefData}
+                  createFollowUp={createFollowUp}
+                  archiveEmail={archiveEmail}
+                  showSnoozeDropdown={showSnoozeDropdown}
+                  setShowSnoozeDropdown={setShowSnoozeDropdown}
+                  snoozeEmail={snoozeEmail}
+                  threadSummary={threadSummary}
+                  summarizeThread={summarizeThread}
+                  smartReplies={smartReplies}
+                  replyBody={replyBody}
+                  setReplyBody={setReplyBody}
+                  replyToEmail={replyToEmail}
+                  LoaderIcon={LoaderIcon}
+                />
+              </div>
+            ) : (
+              <CommandCenter onNavigate={(tab) => setActiveTab(tab)} />
+            )}
+
+            {/* Right panel: mini calendar + email list */}
+            <div className="w-80 shrink-0 border-l border-zinc-900 flex flex-col overflow-hidden bg-zinc-950">
+              <MiniCalendarWidget onNavigateToCalendar={() => setActiveTab("calendar")} />
+              <EmailSidePanel
+                onEmailClick={(id) => {
+                  setActiveMessageId(id);
+                  markRead.mutate({ id, read: true });
+                }}
+                activeMessageId={activeMessageId}
+                gmailAuthError={gmailAuthError}
+                onReconnect={() => signIn("google", { callbackUrl: "/" })}
+              />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "inbox" && (
+          <div className="flex-1 flex overflow-hidden">
             <InboxList
               refreshInbox={refreshInbox}
               setComposeOpen={setComposeOpen}
@@ -828,8 +892,6 @@ export function Dashboard() {
               setSearchQuery={setSearchQuery}
               inboxTab={inboxTab}
               setInboxTab={setInboxTab}
-              emailsLoading={emailsLoading}
-              emails={emails ?? []}
               focusedIndex={focusedIndex}
               setFocusedIndex={setFocusedIndex}
               setActiveMessageId={setActiveMessageId}
@@ -838,30 +900,38 @@ export function Dashboard() {
               selectedEmailIds={selectedEmailIds}
               toggleEmailSelection={toggleEmailSelection}
               clearSelection={clearSelection}
-              LoaderIcon={Loader2}
+              LoaderIcon={LoaderIcon}
               gmailAuthError={gmailAuthError}
               onReconnect={() => signIn("google", { callbackUrl: "/" })}
             />
-
-            {/* 3rd Pane: Reading Pane */}
-            <ReadingPane
-              messageLoading={messageLoading}
-              selectedMessage={selectedMessage}
-              dailyBriefData={dailyBriefData}
-              createFollowUp={createFollowUp}
-              archiveEmail={archiveEmail}
-              showSnoozeDropdown={showSnoozeDropdown}
-              setShowSnoozeDropdown={setShowSnoozeDropdown}
-              snoozeEmail={snoozeEmail}
-              threadSummary={threadSummary}
-              summarizeThread={summarizeThread}
-              smartReplies={smartReplies}
-              replyBody={replyBody}
-              setReplyBody={setReplyBody}
-              replyToEmail={replyToEmail}
-              LoaderIcon={LoaderIcon}
-            />
-          </>
+            <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+              {activeMessageId ? (
+                <ReadingPane
+                  messageLoading={messageLoading}
+                  selectedMessage={selectedMessage}
+                  dailyBriefData={dailyBriefData}
+                  createFollowUp={createFollowUp}
+                  archiveEmail={archiveEmail}
+                  showSnoozeDropdown={showSnoozeDropdown}
+                  setShowSnoozeDropdown={setShowSnoozeDropdown}
+                  snoozeEmail={snoozeEmail}
+                  threadSummary={threadSummary}
+                  summarizeThread={summarizeThread}
+                  smartReplies={smartReplies}
+                  replyBody={replyBody}
+                  setReplyBody={setReplyBody}
+                  replyToEmail={replyToEmail}
+                  LoaderIcon={LoaderIcon}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                  <Mail size={32} className="text-zinc-800 mb-3" />
+                  <p className="text-sm font-medium text-zinc-600">Select an email to read</p>
+                  <p className="text-xs text-zinc-700 mt-1">Click any message from the list on the left</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {activeTab === "calendar" && (
@@ -917,43 +987,59 @@ export function Dashboard() {
             <div className="space-y-3 max-h-75 overflow-y-auto custom-scrollbar pr-1">
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Move list focus down</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">j</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ↓" : "Ctrl+↓"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Move list focus up</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">k</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ↑" : "Ctrl+↑"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Open conversation</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">Enter</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ Enter" : "Ctrl+Enter"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Archive focused thread</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">e</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⇧ E" : "Ctrl+Shift+E"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Mark thread as unread</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">u</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⇧ U" : "Ctrl+Shift+U"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Compose new email</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">c</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⌥ N" : "Ctrl+Alt+N"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Focus inline reply input</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">r</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⌥ R" : "Ctrl+Alt+R"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Go to Inbox</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">g i</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⌥ I" : "Ctrl+Alt+I"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Go to Calendar</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">g c</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⌥ C" : "Ctrl+Alt+C"}</kbd>
+              </div>
+              <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
+                <span className="text-zinc-400">Go to Settings</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ ⌥ S" : "Ctrl+Alt+S"}</kbd>
+              </div>
+              <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
+                <span className="text-zinc-400">Toggle AI Copilot</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ I" : "Ctrl+I"}</kbd>
               </div>
               <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
                 <span className="text-zinc-400">Open Command Palette</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">⌘ K</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ K" : "Ctrl+K"}</kbd>
+              </div>
+              <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
+                <span className="text-zinc-400">Open Keyboard Shortcuts</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">{isMac ? "⌘ /" : "Ctrl+/"}</kbd>
+              </div>
+              <div className="flex justify-between text-xs py-1 border-b border-zinc-800">
+                <span className="text-zinc-400">Close / Go Back</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-zinc-850 border border-zinc-700 text-zinc-200">Esc</kbd>
               </div>
             </div>
           </div>

@@ -40,7 +40,7 @@ export async function provisionCorsairTenant(userId: string, tenantId: string, k
     } else {
       // Rotate DEK to keep it encrypted with the current KEK
       await db.update(corsairIntegrations)
-        .set({ dek: integrationEncryptedDek, updatedAt: new Date() })
+        .set({ dek: integrationEncryptedDek, config: {}, updatedAt: new Date() })
         .where(eq(corsairIntegrations.id, pluginId));
     }
 

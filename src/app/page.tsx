@@ -1,11 +1,18 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { NewLanding } from "@/app/_components/new-landing";
-import { Onboarding } from "@/app/_components/onboarding";
-import { Dashboard } from "@/app/_components/dashboard";
-
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
+
+const NewLanding = dynamic(() =>
+  import("@/app/_components/new-landing").then((m) => ({ default: m.NewLanding }))
+);
+const Onboarding = dynamic(() =>
+  import("@/app/_components/onboarding").then((m) => ({ default: m.Onboarding }))
+);
+const Dashboard = dynamic(() =>
+  import("@/app/_components/dashboard").then((m) => ({ default: m.Dashboard }))
+);
 
 export default function Home() {
   const { data: session, status } = useSession();

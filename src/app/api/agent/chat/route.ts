@@ -1,5 +1,9 @@
-import { google } from "@ai-sdk/google";
-import { streamText, tool, convertToModelMessages, type UIMessage } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? "",
+});
+import { streamText, tool, convertToModelMessages, stepCountIs, type UIMessage } from "ai";
 import { z } from "zod";
 import { auth } from "@/server/auth";
 import { getTenant } from "@/server/lib/tenant";
@@ -71,7 +75,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: google("gemini-2.5-flash"),
     messages: await convertToModelMessages(messages),
-    system: `You are Gusion, the keyboard-first AI email and calendar assistant. 
+    system: `You are Gusion, the keyboard-first AI email and calendar assistant.
 You help the user triage their inbox, reply to emails, and schedule events.
 You are running under the user's secure tenant: ${session.user.corsairTenantId}.
 Current local time is: ${new Date().toISOString()}.
@@ -81,6 +85,7 @@ RULES:
 2. Do NOT send emails or create events directly. Instead, propose them first to let the user approve them in the UI.
 3. For searching or reading emails/events, call the list/search tools directly and display the results cleanly to the user.
 4. Keep your responses concise and action-oriented.`,
+    stopWhen: stepCountIs(5),
     tools: {
       searchEmails: tool({
         description: "Search user emails by query string.",

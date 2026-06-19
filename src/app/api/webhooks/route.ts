@@ -17,7 +17,8 @@ import {
 } from "@/server/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { generateObject } from "ai";
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? "" });
 import { z } from "zod";
 import { env } from "@/env";
 import { publishUserEvent } from "@/server/lib/realtime";

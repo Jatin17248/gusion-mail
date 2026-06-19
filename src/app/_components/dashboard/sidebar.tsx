@@ -17,8 +17,8 @@ import { signOut } from "next-auth/react";
 import Image from "next/image";
 
 interface SidebarProps {
-  activeTab: "tickets" | "gmail" | "calendar" | "bulk" | "settings";
-  setActiveTab: (tab: "tickets" | "gmail" | "calendar" | "bulk" | "settings") => void;
+  activeTab: "tickets" | "gmail" | "calendar" | "bulk" | "settings" | "inbox";
+  setActiveTab: (tab: "tickets" | "gmail" | "calendar" | "bulk" | "settings" | "inbox") => void;
   agentOpen: boolean;
   setAgentOpen: (open: boolean) => void;
   session: any;
@@ -54,7 +54,7 @@ export function Sidebar({
     }
   };
   return (
-    <aside className="w-64 shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
+    <aside className="w-52 shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
       <div className="space-y-6">
         {/* Logo */}
         <div className="flex items-center gap-2 px-2">
@@ -81,9 +81,9 @@ export function Sidebar({
         {/* Navigation Links */}
         <nav className="space-y-1">
           <button
-            onClick={() => setActiveTab("gmail")}
+            onClick={() => setActiveTab("inbox")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "gmail"
+              activeTab === "inbox"
                 ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
                 : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
             }`}
@@ -103,11 +103,9 @@ export function Sidebar({
             <span>Calendar</span>
           </button>
           <button
-            onClick={() => {
-              setAgentOpen(!agentOpen);
-            }}
+            onClick={() => setActiveTab("gmail")}
             className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              agentOpen
+              activeTab === "gmail"
                 ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
                 : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
             }`}

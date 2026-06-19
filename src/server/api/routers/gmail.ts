@@ -17,8 +17,8 @@ import {
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
 import { db } from "@/server/db";
-import { users, emailMeta, sendQueue, followUps } from "@/server/db/schema";
-import { eq, and, or, inArray, ne, desc } from "drizzle-orm";
+import { users, emailMeta, sendQueue, followUps, corsairEntities } from "@/server/db/schema";
+import { eq, and, or, inArray, ne, desc, isNull, sql } from "drizzle-orm";
 
 const paginationSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
@@ -56,22 +56,30 @@ function mapMessage(message: {
     from?: string;
     to?: string;
     body?: string;
-    internalDate?: string;
+    internalDate?: string | null;
     createdAt?: Date | null;
+    // Raw Gmail API shape — Corsair may store the full API response
+    payload?: { headers?: { name?: string; value?: string }[] };
   };
 }): MappedMessage {
+  const headers = message.data.payload?.headers;
+  // Prefer top-level fields (set by webhook pipeline); fall back to
+  // payload.headers (raw Gmail API response stored by the SDK).
+  const subject = message.data.subject || getHeader(headers, "Subject");
+  const from    = message.data.from    || getHeader(headers, "From");
+  const to      = message.data.to      || getHeader(headers, "To");
+
+  const rawDate = message.data.internalDate ?? null;
+
   return {
     id: message.entity_id,
     threadId: message.data.threadId ?? "",
     snippet: message.data.snippet ?? "",
-    subject: message.data.subject ?? "",
-    from: message.data.from ?? "",
-    to: message.data.to ?? "",
-    date: message.data.internalDate ?? null,
-    timestamp: messageTimestamp(
-      message.data.internalDate,
-      message.data.createdAt,
-    ),
+    subject,
+    from,
+    to,
+    date: rawDate,
+    timestamp: messageTimestamp(rawDate ?? undefined, message.data.createdAt),
   };
 }
 
@@ -110,7 +118,9 @@ export const gmailRouter = createTRPCRouter({
               offset: input.offset,
             });
             result = sortMessagesNewestFirst(
-              dedupeByEntityId(messages).map(mapMessage),
+              dedupeByEntityId(messages)
+                .map(mapMessage)
+                .filter((m) => !!(m.from || m.subject || m.snippet)),
             );
           } else {
             let whereClause;
@@ -318,6 +328,19 @@ export const gmailRouter = createTRPCRouter({
         }
       }
 
+      // Clean up any incomplete cached email messages (missing subject)
+      // to force them to be fetched freshly using the full format
+      await db.delete(corsairEntities)
+        .where(
+          and(
+            eq(corsairEntities.entityType, "messages"),
+            or(
+              isNull(sql`data->>'subject'`),
+              eq(sql`data->>'subject'`, "")
+            )
+          )
+        );
+
       // Fetch recent message IDs from Gmail inbox
       const listResult = await tenant.gmail.api.messages.list({
         maxResults: 50,
@@ -336,8 +359,7 @@ export const gmailRouter = createTRPCRouter({
         try {
           await tenant.gmail.api.messages.get({
             id: msg.id,
-            format: "metadata",
-            metadataHeaders: ["Subject", "From", "To", "Date"],
+            format: "full",
           });
           synced++;
         } catch (msgErr: unknown) {

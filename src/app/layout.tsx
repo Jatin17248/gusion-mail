@@ -6,6 +6,7 @@ import { TRPCReactProvider } from "@/trpc/react";
 import { Toaster } from "sonner";
 import { SessionProvider } from "next-auth/react";
 import { auth } from "@/server/auth";
+import type { Session } from "next-auth";
 import { db } from "@/server/db";
 import { systemConfigs, users } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -13,6 +14,8 @@ import { SuspendedView } from "@/components/suspended-view";
 import { MaintenanceView } from "@/components/maintenance-view";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { unstable_rethrow } from "next/navigation";
+import { unstable_cache } from "next/cache";
+import { cookies } from "next/headers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,76 +35,52 @@ async function getSafeSession() {
   }
 }
 
-async function getLayoutState(sessionUserId?: string) {
-  let isSuspended = false;
-  let isMaintenance = false;
-  let isStaff = false;
-  let impersonatedEmail = "";
-  let showImpersonationBanner = false;
-
-  if (sessionUserId) {
+const getMaintenanceMode = unstable_cache(
+  async () => {
     try {
-      const dbUser = await db.query.users.findFirst({
-        where: eq(users.id, sessionUserId),
+      const row = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "maintenanceMode"),
       });
+      return row ? JSON.parse(row.value) === true : false;
+    } catch (error) {
+      console.error("[layout] Failed to load maintenance mode:", error);
+      return false;
+    }
+  },
+  ["maintenance-mode"],
+  { revalidate: 60 }
+);
 
-      if (dbUser) {
-        const adminEmails = process.env.PRODUCT_ADMIN_EMAILS
-          ? process.env.PRODUCT_ADMIN_EMAILS
-              .split(",")
-              .map((e) => e.trim().toLowerCase())
-          : [];
+async function getLayoutState(session: Session | null) {
+  // isStaff and suspendedAt come from the JWT — no DB query needed.
+  const isStaff = session?.user?.isStaff ?? false;
+  const isSuspended = !!session?.user?.suspendedAt;
+  let isMaintenance = false;
+  let showImpersonationBanner = false;
+  let impersonatedEmail = "";
 
-        isStaff =
-          dbUser.isStaff === true ||
-          (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) ||
-          false;
-        isSuspended = !!dbUser.suspendedAt;
-
-        if (isStaff) {
-          const nextHeaders = await import("next/headers");
-          const cookiesList = await nextHeaders.cookies();
-          const impId = cookiesList.get("gusion_impersonate_id")?.value;
-
-          if (impId && impId !== sessionUserId) {
-            const impUser = await db.query.users.findFirst({
-              where: eq(users.id, impId),
-            });
-
-            if (impUser) {
-              showImpersonationBanner = true;
-              impersonatedEmail = impUser.email ?? "";
-            }
-          }
+  if (isStaff && session?.user?.id) {
+    try {
+      const cookiesList = await cookies();
+      const impId = cookiesList.get("gusion_impersonate_id")?.value;
+      if (impId && impId !== session.user.id) {
+        const impUser = await db.query.users.findFirst({
+          where: eq(users.id, impId),
+        });
+        if (impUser) {
+          showImpersonationBanner = true;
+          impersonatedEmail = impUser.email ?? "";
         }
       }
     } catch (error) {
       unstable_rethrow(error);
-      console.error("[layout] Failed to load user state:", error);
+      console.error("[layout] Failed to load impersonated user:", error);
     }
+  } else {
+    isMaintenance = await getMaintenanceMode();
   }
 
-  if (!isStaff) {
-    try {
-      const maintenanceConfig = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, "maintenanceMode"),
-      });
-
-      if (maintenanceConfig && JSON.parse(maintenanceConfig.value) === true) {
-        isMaintenance = true;
-      }
-    } catch (error) {
-      console.error("[layout] Failed to load maintenance mode:", error);
-    }
-  }
-
-  return {
-    isSuspended,
-    isMaintenance,
-    isStaff,
-    impersonatedEmail,
-    showImpersonationBanner,
-  };
+  return { isSuspended, isMaintenance, showImpersonationBanner, impersonatedEmail };
 }
 
 export default async function RootLayout({
@@ -113,7 +92,7 @@ export default async function RootLayout({
     isMaintenance,
     impersonatedEmail,
     showImpersonationBanner,
-  } = await getLayoutState(session?.user?.id);
+  } = await getLayoutState(session);
 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
