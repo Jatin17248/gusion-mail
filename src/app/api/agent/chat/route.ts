@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const { messages } = await req.json() as { messages: UIMessage[] };
+  const { messages, sessionId } = await req.json() as { messages: UIMessage[]; sessionId?: string };
 
   // Save user message to DB
   const lastUserMessage = messages[messages.length - 1];
@@ -62,6 +62,7 @@ export async function POST(req: Request) {
 
     await db.insert(agentMessages).values({
       userId: session.user.id,
+      sessionId: sessionId ?? null,
       role: lastUserMessage.role,
       content: textContent,
       createdAt: new Date(),
@@ -251,9 +252,9 @@ RULES:
       }),
     },
     onFinish: async ({ text, toolCalls }) => {
-      // Save assistant response to DB
       await db.insert(agentMessages).values({
         userId: session.user.id,
+        sessionId: sessionId ?? null,
         role: "assistant",
         content: text ?? null,
         toolCalls: toolCalls ? JSON.stringify(toolCalls) : null,

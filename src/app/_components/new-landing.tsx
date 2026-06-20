@@ -383,6 +383,14 @@ function InboxSimulator() {
 export function NewLanding() {
   const [activeFAQ, setActiveFAQ] = useState<number | null>(null);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get("ref");
+    if (refCode) {
+      localStorage.setItem("gusion_referral_code", refCode.toUpperCase());
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#fff2e0] text-zinc-800 font-sans antialiased overflow-x-hidden">
       

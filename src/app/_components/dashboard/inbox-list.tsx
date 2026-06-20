@@ -6,7 +6,7 @@ import { formatMessageDate, parseEmailAddress } from "@/app/_components/dashboar
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
 interface InboxListProps {
   refreshInbox: { mutate: () => void; isPending: boolean };
@@ -51,6 +51,7 @@ export function InboxList({
 }: InboxListProps) {
   const utils = api.useUtils();
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
 
   const { data: emails = [], isLoading, isFetching } = api.gmail.searchEmails.useQuery(
@@ -71,10 +72,11 @@ export function InboxList({
     setLimit(PAGE_SIZE);
   }, [inboxTab, searchQuery]);
 
-  // Infinite scroll via IntersectionObserver on a sentinel div at the bottom
+  // Infinite scroll: observe sentinel relative to the scroll container (not the viewport)
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    const root = scrollContainerRef.current;
+    if (!sentinel || !root) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -82,7 +84,7 @@ export function InboxList({
           setLimit((prev) => prev + PAGE_SIZE);
         }
       },
-      { rootMargin: "200px" }
+      { root, rootMargin: "150px" }
     );
 
     observer.observe(sentinel);
@@ -192,7 +194,7 @@ export function InboxList({
       )}
 
       {/* Email list */}
-      <div className="flex-1 overflow-y-auto divide-y divide-zinc-900/50">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto divide-y divide-zinc-900/50">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-2">
             <Loader2 size={18} className="animate-spin text-zinc-600" />

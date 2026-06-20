@@ -131,6 +131,7 @@ export const agentMessages = pgTable("agent_messages", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id"),
   role: text("role").notNull(), // 'user' | 'assistant' | 'system' | 'tool'
   content: text("content"),
   toolCalls: text("tool_calls"), // JSON string

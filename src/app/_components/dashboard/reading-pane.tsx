@@ -162,7 +162,7 @@ export function ReadingPane({
   ];
 
   return (
-    <section className="flex-1 flex flex-col bg-zinc-950">
+    <section className="flex-1 flex flex-col bg-zinc-950 overflow-hidden min-h-0">
       {messageLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-2">
           <LoaderIcon />
@@ -199,8 +199,8 @@ export function ReadingPane({
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex h-full overflow-hidden">
-          <div className="flex-1 flex flex-col h-full border-r border-zinc-900">
+        <div className="flex-1 flex h-full overflow-hidden min-h-0">
+          <div className="flex-1 flex flex-col h-full border-r border-zinc-900 overflow-hidden min-h-0">
             {/* Reading Pane Header */}
             <div className="p-6 border-b border-zinc-900 flex justify-between items-start gap-4">
               <div className="min-w-0">
@@ -338,7 +338,7 @@ export function ReadingPane({
           </div>
 
           {/* Reading Pane Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 min-h-0">
             {/* AI Summary Card */}
             <div className="p-4 rounded-xl border border-indigo-500/10 bg-indigo-500/5 space-y-3">
               <div className="flex items-center justify-between">

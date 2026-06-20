@@ -39,13 +39,13 @@ const LoginForm = () => {
 
           // Redirect based on onboarding status
           if (statusData.onboardingCompleted) {
-            router.push('/');
+            router.push('/dashboard');
           } else {
-            router.push('/register/onboarding');
+            router.push('/onboarding');
           }
         } catch (err) {
           console.error('Error checking onboarding status:', err);
-          router.push('/');
+          router.push('/dashboard');
         }
       }
     } catch (err) {
@@ -149,7 +149,7 @@ const LoginForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign in with Google"
           >
@@ -159,7 +159,7 @@ const LoginForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("facebook", { callbackUrl: "/" })}
+            onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign in with Meta"
           >

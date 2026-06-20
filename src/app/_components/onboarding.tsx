@@ -25,9 +25,8 @@ export function Onboarding() {
       setStatus("success");
       toast.success("Inbox connected successfully!");
       trackEvent(session?.user?.id, "onboarding_completed");
-      // Reload window so useSession updates and routes to dashboard
       setTimeout(() => {
-        window.location.reload();
+        window.location.href = "/dashboard";
       }, 1500);
     },
     onError: (err) => {
@@ -121,7 +120,7 @@ export function Onboarding() {
                   You need to connect your Google account to use Gusion Mail.
                 </p>
                 <button
-                  onClick={() => signIn("google", { callbackUrl: "/" })}
+                  onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
                   className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-medium rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">

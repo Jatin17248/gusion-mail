@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { api } from "@/trpc/react";
@@ -20,6 +20,10 @@ import {
   Zap,
   AtSign,
   FileText,
+  History,
+  Plus,
+  X,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +36,14 @@ const QUICK_ACTIONS = [
   { label: "Quick reply", icon: Zap, prompt: "Draft a quick reply to the most recent email in my inbox." },
 ];
 
+function formatDate(d: Date): string {
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  return isToday
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 interface CommandCenterProps {
   onNavigate: (tab: "gmail" | "calendar" | "settings" | "tickets" | "bulk" | "inbox") => void;
 }
@@ -42,10 +54,44 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
   const historyLoadedRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { data: history } = api.agent.getHistory.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: Infinity,
+  // Session management (persisted to localStorage)
+  const [sessionId, setSessionId] = useState<string>(() => {
+    if (typeof window === "undefined") return crypto.randomUUID();
+    try {
+      const stored = localStorage.getItem("gusion_session_id");
+      if (stored) return stored;
+      const newId = crypto.randomUUID();
+      localStorage.setItem("gusion_session_id", newId);
+      return newId;
+    } catch {
+      return crypto.randomUUID();
+    }
   });
+
+  const [showHistory, setShowHistory] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search query
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(historySearch), 400);
+    return () => clearTimeout(t);
+  }, [historySearch]);
+
+  const { data: history } = api.agent.getHistory.useQuery(
+    { sessionId },
+    { refetchOnWindowFocus: false, staleTime: Infinity }
+  );
+
+  const { data: sessions = [] } = api.agent.getSessions.useQuery(undefined, {
+    enabled: showHistory,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: searchResults = [] } = api.agent.searchHistory.useQuery(
+    { query: debouncedSearch },
+    { enabled: !!debouncedSearch.trim() }
+  );
 
   const { data: contactsData } = api.contacts.listContacts.useQuery(
     { limit: 50 },
@@ -56,11 +102,22 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
     staleTime: 60000,
   });
 
+  // Create transport bound to current sessionId
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/agent/chat", body: { sessionId } }),
+    [sessionId]
+  );
+
+  const { messages, sendMessage, setMessages, status } = useChat({ transport });
+
   const clearHistoryMutation = api.agent.clearHistory.useMutation({
     onSuccess: () => {
       setMessages([]);
       historyLoadedRef.current = false;
-      toast.success("Chat history cleared");
+      const newId = crypto.randomUUID();
+      try { localStorage.setItem("gusion_session_id", newId); } catch {}
+      setSessionId(newId);
+      toast.success("Conversation cleared");
     },
   });
 
@@ -71,13 +128,10 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(0);
 
-  const { messages, sendMessage, setMessages, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/agent/chat" }),
-  });
-
   const isLoading = status === "submitted" || status === "streaming";
   const hasMessages = messages.length > 0;
 
+  // Load history for current session on mount / session change
   useEffect(() => {
     if (history && !historyLoadedRef.current) {
       historyLoadedRef.current = true;
@@ -97,10 +151,27 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Reset highlighted index when dropdown opens or query changes
   useEffect(() => {
     setHighlightedIdx(0);
   }, [showMentionDropdown, showTemplateDropdown, mentionQuery, templateQuery]);
+
+  const startNewChat = () => {
+    const newId = crypto.randomUUID();
+    try { localStorage.setItem("gusion_session_id", newId); } catch {}
+    setSessionId(newId);
+    setMessages([]);
+    historyLoadedRef.current = false;
+    setShowHistory(false);
+  };
+
+  const loadSession = (sid: string) => {
+    if (sid === sessionId) { setShowHistory(false); return; }
+    try { localStorage.setItem("gusion_session_id", sid); } catch {}
+    setSessionId(sid);
+    setMessages([]);
+    historyLoadedRef.current = false;
+    setShowHistory(false);
+  };
 
   const filteredContacts = (contactsData ?? []).filter((c) => {
     if (!mentionQuery) return true;
@@ -130,9 +201,7 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
     const cursorPos = e.target.selectionStart ?? val.length;
     const textBeforeCursor = val.slice(0, cursorPos);
 
-    // Detect @mention
     const atMatch = /@([^@\s]*)$/.exec(textBeforeCursor);
-    // Detect /template (only if not inside an @)
     const slashMatch = !atMatch ? /\/([^\s]*)$/.exec(textBeforeCursor) : null;
 
     if (atMatch) {
@@ -194,11 +263,8 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
         e.preventDefault();
         const item = items[highlightedIdx];
         if (item) {
-          if (showMentionDropdown) {
-            insertContact(item as { name: string | null; email: string });
-          } else {
-            insertTemplate(item as { body: string });
-          }
+          if (showMentionDropdown) insertContact(item as { name: string | null; email: string });
+          else insertTemplate(item as { body: string });
         }
         return;
       }
@@ -216,267 +282,365 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-zinc-950 overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-3.5 border-b border-zinc-900 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
-            <Sparkles size={14} className="text-indigo-400" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-zinc-100 leading-none">Gusion AI</h2>
-            <p className="text-[10px] text-zinc-600 mt-0.5">your email command center</p>
-          </div>
-        </div>
-        {hasMessages && (
-          <button
-            onClick={() => clearHistoryMutation.mutate()}
-            className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
-            title="Clear conversation"
-          >
-            <Trash2 size={13} />
-          </button>
-        )}
-      </div>
-
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-        {!hasMessages && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-5 pb-10">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center">
-              <Sparkles size={28} className="text-indigo-400" />
+    <div className="flex-1 flex overflow-hidden bg-zinc-950">
+      {/* History sidebar */}
+      {showHistory && (
+        <div className="w-64 border-r border-zinc-900 flex flex-col shrink-0 overflow-hidden">
+          <div className="p-3 border-b border-zinc-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-300">History</span>
+              <button
+                onClick={startNewChat}
+                className="px-2 py-1 text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer flex items-center gap-1"
+              >
+                <Plus size={10} /> New
+              </button>
             </div>
-            <div>
-              <p className="text-base font-semibold text-zinc-200">What would you like to do?</p>
-              <p className="text-xs text-zinc-600 mt-1.5 max-w-xs leading-relaxed">
-                I can draft emails, search your inbox, schedule meetings, summarize threads, and more.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
-              {QUICK_ACTIONS.map((action) => (
+            <div className="relative">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search conversations..."
+                className="w-full pl-7 pr-7 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 transition"
+              />
+              {historySearch && (
                 <button
-                  key={action.label}
-                  onClick={() => handleSend(action.prompt)}
-                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-xl transition cursor-pointer text-left"
+                  onClick={() => setHistorySearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400"
                 >
-                  <action.icon size={13} className="text-indigo-400 shrink-0" />
-                  {action.label}
+                  <X size={10} />
                 </button>
-              ))}
+              )}
             </div>
           </div>
-        )}
 
-        {messages.map((message: UIMessage) => {
-          const isUser = message.role === "user";
-          const textContent =
-            message.parts
-              ?.filter((part) => part.type === "text")
-              .map((part) => part.text)
-              .join("\n") ?? "";
-
-          return (
-            <div key={message.id} className={`flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
-              {textContent && (
-                <div
-                  className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
-                    isUser
-                      ? "bg-indigo-600 text-white rounded-br-sm"
-                      : "bg-zinc-900 text-zinc-200 border border-zinc-800/60 rounded-bl-sm"
+          <div className="flex-1 overflow-y-auto">
+            {historySearch.trim() ? (
+              debouncedSearch.trim() && searchResults.length === 0 ? (
+                <div className="py-10 text-center text-xs text-zinc-600">No results found</div>
+              ) : (
+                searchResults.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => r.sessionId && loadSession(r.sessionId)}
+                    className={`w-full text-left px-3 py-2.5 border-b border-zinc-900/50 transition hover:bg-zinc-900/50 cursor-pointer ${
+                      r.sessionId === sessionId ? "border-l-2 border-l-indigo-500 bg-indigo-500/5" : ""
+                    }`}
+                  >
+                    <p className="text-[11px] text-zinc-300 line-clamp-2 leading-relaxed">{r.content}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">{formatDate(r.createdAt)}</p>
+                  </button>
+                ))
+              )
+            ) : sessions.length === 0 ? (
+              <div className="py-10 text-center text-xs text-zinc-600 flex flex-col items-center gap-2">
+                <MessageSquare size={20} className="text-zinc-800" />
+                No past conversations
+              </div>
+            ) : (
+              sessions.map((s) => (
+                <button
+                  key={s.sessionId}
+                  onClick={() => loadSession(s.sessionId)}
+                  className={`w-full text-left px-3 py-2.5 border-b border-zinc-900/50 transition hover:bg-zinc-900/50 cursor-pointer ${
+                    s.sessionId === sessionId ? "bg-indigo-500/5 border-l-2 border-l-indigo-500" : ""
                   }`}
                 >
-                  {textContent}
-                </div>
-              )}
-
-              {message.parts?.map((part) => {
-                if (part.type?.startsWith("tool-")) {
-                  const toolInv = part as unknown as {
-                    type: string;
-                    toolCallId: string;
-                    output?: { status: string; proposalType: string; data: unknown };
-                  };
-                  const result = toolInv.output;
-                  if (result?.status === "requires_confirmation") {
-                    if (result.proposalType === "email") {
-                      return <EmailProposalCard key={toolInv.toolCallId} data={result.data as EmailProposalData} />;
-                    } else if (result.proposalType === "event") {
-                      return <EventProposalCard key={toolInv.toolCallId} data={result.data as EventProposalData} />;
-                    }
-                  }
-                }
-                return null;
-              })}
-            </div>
-          );
-        })}
-
-        {isLoading && (
-          <div className="flex items-start gap-2">
-            <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
-              <Sparkles size={11} className="text-indigo-400" />
-            </div>
-            <div className="flex items-center gap-1 py-2">
-              <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" />
-              <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:150ms]" />
-              <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:300ms]" />
-            </div>
+                  <p className="text-[11px] text-zinc-200 font-medium line-clamp-2 leading-relaxed">
+                    {s.title || "Conversation"}
+                  </p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">
+                    {formatDate(s.lastAt)} · {s.messageCount} msg{s.messageCount !== 1 ? "s" : ""}
+                  </p>
+                </button>
+              ))
+            )}
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Quick action chips */}
-      {hasMessages && (
-        <div className="px-6 pb-2 flex gap-1.5 flex-wrap shrink-0">
-          {QUICK_ACTIONS.slice(0, 4).map((action) => (
-            <button
-              key={action.label}
-              onClick={() => handleSend(action.prompt)}
-              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-500 hover:text-zinc-300 rounded-full transition cursor-pointer"
-            >
-              <action.icon size={9} />
-              {action.label}
-            </button>
-          ))}
         </div>
       )}
 
-      {/* Input area */}
-      <div className="px-6 pb-5 pt-2 shrink-0 border-t border-zinc-900">
-        <div className="relative">
-          {/* @ Contact dropdown */}
-          {showMentionDropdown && filteredContacts.length > 0 && (
-            <div
-              ref={dropdownRef}
-              className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-3.5 border-b border-zinc-900 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              title="Chat history"
+              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                showHistory ? "bg-zinc-800 text-zinc-200" : "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900"
+              }`}
             >
-              <div className="px-3 py-1.5 border-b border-zinc-800">
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Contacts</span>
-              </div>
-              {filteredContacts.map((contact, idx) => (
-                <button
-                  key={contact.email}
-                  onMouseDown={(e) => { e.preventDefault(); insertContact(contact); }}
-                  className={`w-full text-left flex items-center gap-2.5 px-3 py-2 transition cursor-pointer ${
-                    idx === highlightedIdx ? "bg-indigo-600/15 text-zinc-100" : "hover:bg-zinc-800 text-zinc-300"
-                  }`}
-                >
-                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-400 shrink-0">
-                    {(contact.name ?? contact.email).charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    {contact.name && <div className="text-xs font-medium truncate">{contact.name}</div>}
-                    <div className="text-[10px] text-zinc-500 truncate">{contact.email}</div>
-                  </div>
-                </button>
-              ))}
+              <History size={14} />
+            </button>
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
+              <Sparkles size={14} className="text-indigo-400" />
             </div>
-          )}
-
-          {/* / Template dropdown */}
-          {showTemplateDropdown && filteredTemplates.length > 0 && (
-            <div
-              ref={dropdownRef}
-              className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
-            >
-              <div className="px-3 py-1.5 border-b border-zinc-800">
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Templates</span>
-              </div>
-              {filteredTemplates.map((tpl, idx) => (
-                <button
-                  key={tpl.id}
-                  onMouseDown={(e) => { e.preventDefault(); insertTemplate(tpl); }}
-                  className={`w-full text-left flex items-center gap-2.5 px-3 py-2 transition cursor-pointer ${
-                    idx === highlightedIdx ? "bg-indigo-600/15 text-zinc-100" : "hover:bg-zinc-800 text-zinc-300"
-                  }`}
-                >
-                  <FileText size={12} className="text-indigo-400 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium truncate">{tpl.name}</div>
-                    {tpl.shortcut && <div className="text-[10px] text-zinc-500">/{tpl.shortcut}</div>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-col bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-800 rounded-2xl focus-within:border-indigo-500/60 transition-colors overflow-hidden shadow-sm">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask me to reply to emails, schedule meetings, search your inbox..."
-              rows={3}
-              className="w-full px-4 pt-3.5 pb-2 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none focus:outline-none leading-relaxed"
-            />
-            <div className="flex items-center justify-between px-3 pb-2.5 pt-1 gap-2">
-              <div className="flex gap-1">
-                <button
-                  onClick={() => handleSend("Help me compose a new email")}
-                  className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
-                  title="Compose email"
-                >
-                  <PenLine size={10} /> Compose
-                </button>
-                <button
-                  onClick={() => handleSend("Help me schedule a meeting")}
-                  className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
-                  title="Schedule meeting"
-                >
-                  <Calendar size={10} /> Schedule
-                </button>
-                <button
-                  onClick={() => {
-                    const atPos = input.length;
-                    setInput(input + "@");
-                    setShowMentionDropdown(true);
-                    setMentionQuery("");
-                    setTimeout(() => {
-                      if (inputRef.current) {
-                        inputRef.current.focus();
-                        inputRef.current.setSelectionRange(atPos + 1, atPos + 1);
-                      }
-                    }, 10);
-                  }}
-                  className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
-                  title="Mention a contact"
-                >
-                  <AtSign size={10} /> Contact
-                </button>
-                <button
-                  onClick={() => {
-                    const slashPos = input.length;
-                    setInput(input + "/");
-                    setShowTemplateDropdown(true);
-                    setTemplateQuery("");
-                    setTimeout(() => {
-                      if (inputRef.current) {
-                        inputRef.current.focus();
-                        inputRef.current.setSelectionRange(slashPos + 1, slashPos + 1);
-                      }
-                    }, 10);
-                  }}
-                  className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
-                  title="Insert template"
-                >
-                  <FileText size={10} /> Template
-                </button>
-              </div>
-              <button
-                onClick={() => handleSend(input)}
-                disabled={isLoading || !input.trim()}
-                className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition cursor-pointer disabled:opacity-40 flex items-center justify-center shrink-0"
-              >
-                <Send size={14} />
-              </button>
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100 leading-none">Gusion AI</h2>
+              <p className="text-[10px] text-zinc-600 mt-0.5">your email command center</p>
             </div>
           </div>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={startNewChat}
+              title="New chat"
+              className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
+            >
+              <Plus size={14} />
+            </button>
+            {hasMessages && (
+              <button
+                onClick={() => clearHistoryMutation.mutate({ sessionId })}
+                className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
+                title="Clear this conversation"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
         </div>
-        <p className="text-[10px] text-zinc-700 mt-1.5 text-center">
-          Enter to send · Shift+Enter for new line · <span className="text-zinc-600">@ contacts · / templates</span>
-        </p>
+
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {!hasMessages && (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-5 pb-10">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center">
+                <Sparkles size={28} className="text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-zinc-200">What would you like to do?</p>
+                <p className="text-xs text-zinc-600 mt-1.5 max-w-xs leading-relaxed">
+                  I can draft emails, search your inbox, schedule meetings, summarize threads, and more.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => handleSend(action.prompt)}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-xl transition cursor-pointer text-left"
+                  >
+                    <action.icon size={13} className="text-indigo-400 shrink-0" />
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((message: UIMessage) => {
+            const isUser = message.role === "user";
+            const textContent =
+              message.parts
+                ?.filter((part) => part.type === "text")
+                .map((part) => part.text)
+                .join("\n") ?? "";
+
+            return (
+              <div key={message.id} className={`flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
+                {textContent && (
+                  <div
+                    className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
+                      isUser
+                        ? "bg-indigo-600 text-white rounded-br-sm"
+                        : "bg-zinc-900 text-zinc-200 border border-zinc-800/60 rounded-bl-sm"
+                    }`}
+                  >
+                    {textContent}
+                  </div>
+                )}
+
+                {message.parts?.map((part) => {
+                  if (part.type?.startsWith("tool-")) {
+                    const toolInv = part as unknown as {
+                      type: string;
+                      toolCallId: string;
+                      output?: { status: string; proposalType: string; data: unknown };
+                    };
+                    const result = toolInv.output;
+                    if (result?.status === "requires_confirmation") {
+                      if (result.proposalType === "email") {
+                        return <EmailProposalCard key={toolInv.toolCallId} data={result.data as EmailProposalData} />;
+                      } else if (result.proposalType === "event") {
+                        return <EventProposalCard key={toolInv.toolCallId} data={result.data as EventProposalData} />;
+                      }
+                    }
+                  }
+                  return null;
+                })}
+              </div>
+            );
+          })}
+
+          {isLoading && (
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+                <Sparkles size={11} className="text-indigo-400" />
+              </div>
+              <div className="flex items-center gap-1 py-2">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" />
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:300ms]" />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Quick action chips */}
+        {hasMessages && (
+          <div className="px-6 pb-2 flex gap-1.5 flex-wrap shrink-0">
+            {QUICK_ACTIONS.slice(0, 4).map((action) => (
+              <button
+                key={action.label}
+                onClick={() => handleSend(action.prompt)}
+                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-500 hover:text-zinc-300 rounded-full transition cursor-pointer"
+              >
+                <action.icon size={9} />
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className="px-6 pb-5 pt-2 shrink-0 border-t border-zinc-900">
+          <div className="relative">
+            {/* @ Contact dropdown */}
+            {showMentionDropdown && filteredContacts.length > 0 && (
+              <div
+                ref={dropdownRef}
+                className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
+              >
+                <div className="px-3 py-1.5 border-b border-zinc-800">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Contacts</span>
+                </div>
+                {filteredContacts.map((contact, idx) => (
+                  <button
+                    key={contact.email}
+                    onMouseDown={(e) => { e.preventDefault(); insertContact(contact); }}
+                    className={`w-full text-left flex items-center gap-2.5 px-3 py-2 transition cursor-pointer ${
+                      idx === highlightedIdx ? "bg-indigo-600/15 text-zinc-100" : "hover:bg-zinc-800 text-zinc-300"
+                    }`}
+                  >
+                    <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-400 shrink-0">
+                      {(contact.name ?? contact.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      {contact.name && <div className="text-xs font-medium truncate">{contact.name}</div>}
+                      <div className="text-[10px] text-zinc-500 truncate">{contact.email}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* / Template dropdown */}
+            {showTemplateDropdown && filteredTemplates.length > 0 && (
+              <div
+                ref={dropdownRef}
+                className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
+              >
+                <div className="px-3 py-1.5 border-b border-zinc-800">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Templates</span>
+                </div>
+                {filteredTemplates.map((tpl, idx) => (
+                  <button
+                    key={tpl.id}
+                    onMouseDown={(e) => { e.preventDefault(); insertTemplate(tpl); }}
+                    className={`w-full text-left flex items-center gap-2.5 px-3 py-2 transition cursor-pointer ${
+                      idx === highlightedIdx ? "bg-indigo-600/15 text-zinc-100" : "hover:bg-zinc-800 text-zinc-300"
+                    }`}
+                  >
+                    <FileText size={12} className="text-indigo-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium truncate">{tpl.name}</div>
+                      {tpl.shortcut && <div className="text-[10px] text-zinc-500">/{tpl.shortcut}</div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-800 rounded-2xl focus-within:border-indigo-500/60 transition-colors overflow-hidden shadow-sm">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask me to reply to emails, schedule meetings, search your inbox..."
+                rows={3}
+                className="w-full px-4 pt-3.5 pb-2 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none focus:outline-none leading-relaxed"
+              />
+              <div className="flex items-center justify-between px-3 pb-2.5 pt-1 gap-2">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleSend("Help me compose a new email")}
+                    className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Compose email"
+                  >
+                    <PenLine size={10} /> Compose
+                  </button>
+                  <button
+                    onClick={() => handleSend("Help me schedule a meeting")}
+                    className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Schedule meeting"
+                  >
+                    <Calendar size={10} /> Schedule
+                  </button>
+                  <button
+                    onClick={() => {
+                      const atPos = input.length;
+                      setInput(input + "@");
+                      setShowMentionDropdown(true);
+                      setMentionQuery("");
+                      setTimeout(() => {
+                        if (inputRef.current) {
+                          inputRef.current.focus();
+                          inputRef.current.setSelectionRange(atPos + 1, atPos + 1);
+                        }
+                      }, 10);
+                    }}
+                    className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Mention a contact"
+                  >
+                    <AtSign size={10} /> Contact
+                  </button>
+                  <button
+                    onClick={() => {
+                      const slashPos = input.length;
+                      setInput(input + "/");
+                      setShowTemplateDropdown(true);
+                      setTemplateQuery("");
+                      setTimeout(() => {
+                        if (inputRef.current) {
+                          inputRef.current.focus();
+                          inputRef.current.setSelectionRange(slashPos + 1, slashPos + 1);
+                        }
+                      }, 10);
+                    }}
+                    className="px-2.5 py-1.5 text-[10px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    title="Insert template"
+                  >
+                    <FileText size={10} /> Template
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleSend(input)}
+                  disabled={isLoading || !input.trim()}
+                  className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition cursor-pointer disabled:opacity-40 flex items-center justify-center shrink-0"
+                >
+                  <Send size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-zinc-700 mt-1.5 text-center">
+            Enter to send · Shift+Enter for new line · <span className="text-zinc-600">@ contacts · / templates</span>
+          </p>
+        </div>
       </div>
     </div>
   );

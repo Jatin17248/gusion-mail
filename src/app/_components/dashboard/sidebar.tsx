@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface SidebarProps {
-  activeTab: "tickets" | "gmail" | "calendar" | "bulk" | "settings" | "inbox";
-  setActiveTab: (tab: "tickets" | "gmail" | "calendar" | "bulk" | "settings" | "inbox") => void;
   agentOpen: boolean;
   setAgentOpen: (open: boolean) => void;
   session: any;
@@ -26,13 +26,11 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  activeTab,
-  setActiveTab,
-  agentOpen,
   setAgentOpen,
   session,
   trialDaysRemaining,
 }: SidebarProps) {
+  const pathname = usePathname();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
 
@@ -53,108 +51,95 @@ export function Sidebar({
       setTheme("dark");
     }
   };
+
+  const navItems = [
+    {
+      href: "/dashboard",
+      label: "AI Agent",
+      icon: Sparkles,
+      exact: true,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      href: "/dashboard/inbox",
+      label: "Emails",
+      icon: Mail,
+      exact: false,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      href: "/dashboard/calendar",
+      label: "Calendar",
+      icon: CalendarIcon,
+      exact: false,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      href: "/dashboard/tickets",
+      label: "Support Queue",
+      icon: HelpCircle,
+      exact: false,
+      onClick: () => setAgentOpen(false),
+    },
+    {
+      href: "/dashboard/bulk",
+      label: "Bulk Campaign",
+      icon: FileSpreadsheet,
+      exact: false,
+      onClick: () => setAgentOpen(false),
+    },
+    {
+      href: "/dashboard/settings",
+      label: "Settings",
+      icon: Settings,
+      exact: false,
+      onClick: () => setAgentOpen(false),
+    },
+  ];
+
   return (
     <aside className="w-52 shrink-0 border-r border-zinc-900 bg-zinc-900/10 flex flex-col justify-between p-4">
       <div className="space-y-6">
         {/* Logo */}
         <div className="flex items-center gap-2 px-2">
-          {/* <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg">
-            G
-          </div>
-          <span className="font-bold text-md tracking-tight text-zinc-100">Gusion Mail</span> */}
-
-            <Image 
+          <Image
             src="/images/logoWhite.svg"
             alt="Gusion Mail"
             className="hidden dark:block h-13 w-48"
-
-            width={32} height={32} />
-             <Image 
+            width={32}
+            height={32}
+          />
+          <Image
             src="/images/logodark.svg"
             alt="Gusion Mail"
-                        className="dark:hidden block h-13 w-48"
-
-            width={32} height={32} />
-
+            className="dark:hidden block h-13 w-48"
+            width={32}
+            height={32}
+          />
         </div>
 
         {/* Navigation Links */}
         <nav className="space-y-1">
-          <button
-            onClick={() => setActiveTab("inbox")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "inbox"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <Mail size={16} />
-            <span>Emails</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("calendar")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "calendar"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <CalendarIcon size={16} />
-            <span>Calendar</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("gmail")}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "gmail"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <Sparkles size={16} />
-            <span>AI Agent</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("tickets");
-              setAgentOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "tickets"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <HelpCircle size={16} />
-            <span>Support Queue</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("bulk");
-              setAgentOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "bulk"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <FileSpreadsheet size={16} />
-            <span>Bulk Campaign</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("settings");
-              setAgentOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
-              activeTab === "settings"
-                ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }`}
-          >
-            <Settings size={16} />
-            <span>Settings</span>
-          </button>
+          {navItems.map((item) => {
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={item.onClick}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition cursor-pointer ${
+                  isActive
+                    ? "bg-indigo-500/10 text-indigo-400 border-l-2 border-indigo-500"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                }`}
+              >
+                <item.icon size={16} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
       </div>
 
@@ -197,7 +182,7 @@ export function Sidebar({
               </button>
             )}
             <button
-              onClick={() => signOut()}
+              onClick={() => signOut({ callbackUrl: "/login" })}
               title="Sign Out"
               className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
             >

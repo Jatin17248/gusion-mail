@@ -17,8 +17,8 @@ import {
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
 import { db } from "@/server/db";
-import { users, emailMeta, sendQueue, followUps, corsairEntities } from "@/server/db/schema";
-import { eq, and, or, inArray, ne, desc, isNull, sql } from "drizzle-orm";
+import { users, emailMeta, sendQueue, followUps } from "@/server/db/schema";
+import { eq, and, or, inArray, ne, desc } from "drizzle-orm";
 
 const paginationSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
@@ -328,25 +328,12 @@ export const gmailRouter = createTRPCRouter({
         }
       }
 
-      // Clean up any incomplete cached email messages (missing subject)
-      // to force them to be fetched freshly using the full format
-      await db.delete(corsairEntities)
-        .where(
-          and(
-            eq(corsairEntities.entityType, "messages"),
-            or(
-              isNull(sql`data->>'subject'`),
-              eq(sql`data->>'subject'`, "")
-            )
-          )
-        );
-
       // Fetch recent message IDs from Gmail inbox
       const listResult = await tenant.gmail.api.messages.list({
-        maxResults: 50,
+        maxResults: 100,
         labelIds: ["INBOX"],
       });
-      const msgList = (listResult.messages ?? []).slice(0, 30) as { id?: string }[];
+      const msgList = (listResult.messages ?? []) as { id?: string }[];
 
       // Fetch each message. The SDK's messages.get auto-caches entity data
       // (including subject/from/to extracted from headers) via the entity
@@ -376,7 +363,7 @@ export const gmailRouter = createTRPCRouter({
 
       // Invalidate all inbox cache entries for this user (cover common limit values)
       const tabs = ["important", "other", "vip", "all"];
-      const limits = [30, 50, 100];
+      const limits = [25, 50, 75, 100];
       const cachePatterns = tabs.flatMap((tab) =>
         limits.map((limit) => `gmail:inbox:${ctx.session.user.id}:${tab}:${limit}:0`)
       );

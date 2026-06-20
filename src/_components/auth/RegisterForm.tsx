@@ -72,12 +72,12 @@ const RegisterForm = () => {
           const statusResponse = await fetch("/api/user/status");
           const statusData = await statusResponse.json();
           if (statusData.onboardingCompleted) {
-            router.push("/");
+            router.push("/dashboard");
           } else {
-            router.push("/register/onboarding");
+            router.push("/onboarding");
           }
         } catch {
-          router.push("/");
+          router.push("/dashboard");
         }
       } else {
         router.push("/login");
@@ -241,7 +241,7 @@ const RegisterForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign up with Google"
           >
@@ -251,7 +251,7 @@ const RegisterForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("facebook", { callbackUrl: "/" })}
+            onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
             className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
             aria-label="Sign up with Meta"
           >

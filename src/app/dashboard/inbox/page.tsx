@@ -1,0 +1,274 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { api } from "@/trpc/react";
+import { toast } from "sonner";
+import { Mail, Loader2 } from "lucide-react";
+import { InboxList } from "@/app/_components/dashboard/inbox-list";
+import { ReadingPane } from "@/app/_components/dashboard/reading-pane";
+import { useDashboard } from "@/app/dashboard/_context/dashboard-context";
+import { useShortcuts } from "@/app/_hooks/use-shortcuts";
+
+function LoaderIcon() {
+  return <Loader2 size={16} className="animate-spin text-zinc-500" />;
+}
+
+export default function InboxPage() {
+  const searchParams = useSearchParams();
+  const { setComposeOpen } = useDashboard();
+  const utils = api.useUtils();
+
+  const initialMsg = searchParams.get("msg");
+
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(initialMsg);
+  const [showSnoozeDropdown, setShowSnoozeDropdown] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [smartReplies, setSmartReplies] = useState<{ label: string; body: string }[]>([]);
+  const [threadSummary, setThreadSummary] = useState<string | null>(null);
+  const [gmailAuthError, setGmailAuthError] = useState(false);
+
+  // Debounce search
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const toggleEmailSelection = (id: string) => {
+    setSelectedEmailIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => setSelectedEmailIds(new Set());
+
+  const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
+    { query: debouncedSearch, limit: 30, tab: inboxTab },
+    { retry: false, staleTime: 30000 }
+  );
+
+  const { data: selectedMessage, isLoading: messageLoading } = api.gmail.getMessage.useQuery(
+    { id: activeMessageId ?? "" },
+    { enabled: !!activeMessageId }
+  );
+
+  const { data: dailyBriefData } = api.ai.aiDailyBrief.useQuery(undefined, {
+    enabled: !activeMessageId,
+    retry: false,
+  });
+
+  const refreshInbox = api.gmail.refreshInbox.useMutation({
+    onSuccess: (res) => {
+      if (res.synced > 0) toast.success(`Synced ${res.synced} emails.`);
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => {
+      if (err.data?.code === "UNAUTHORIZED") {
+        setGmailAuthError(true);
+      } else {
+        toast.error("Sync failed.");
+      }
+    },
+  });
+
+  const markRead = api.gmail.markRead.useMutation({
+    onSuccess: () => {
+      void utils.gmail.searchEmails.invalidate();
+      if (activeMessageId) {
+        void utils.gmail.getMessage.invalidate({ id: activeMessageId });
+      }
+    },
+  });
+
+  const archiveEmail = api.gmail.archiveEmail.useMutation({
+    onMutate: async ({ id }) => {
+      toast.info("Archived message", {
+        action: {
+          label: "Undo",
+          onClick: () => toast.info("Undo Send not supported in preview"),
+        },
+      });
+      if (activeMessageId === id) {
+        setActiveMessageId(null);
+      }
+    },
+    onSuccess: () => {
+      void utils.gmail.searchEmails.invalidate();
+    },
+  });
+
+  const snoozeEmail = api.gmail.snoozeEmail.useMutation({
+    onSuccess: () => {
+      toast.success("Email snoozed!");
+      setActiveMessageId(null);
+      void utils.gmail.searchEmails.invalidate();
+    },
+    onError: (err) => toast.error(err.message || "Failed to snooze email."),
+  });
+
+  const replyToEmail = api.gmail.replyToEmail.useMutation({
+    onSuccess: () => {
+      toast.success("Reply sent!");
+      setReplyBody("");
+      void utils.gmail.searchEmails.invalidate();
+      if (activeMessageId) {
+        void utils.gmail.getMessage.invalidate({ id: activeMessageId });
+      }
+    },
+    onError: (err) => toast.error(err.message || "Failed to send reply."),
+  });
+
+  const createFollowUp = api.gmail.createFollowUp.useMutation({
+    onSuccess: () => {
+      toast.success("Follow-up reminder set for 2 days from now!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to set follow-up reminder.");
+    },
+  });
+
+  const getSmartReplies = api.ai.aiSmartReply.useMutation({
+    onSuccess: (res) => {
+      setSmartReplies(res.replies);
+    },
+    onError: () => {
+      setSmartReplies([]);
+    },
+  });
+
+  const summarizeThread = api.ai.aiSummarize.useMutation({
+    onSuccess: (res) => {
+      setThreadSummary(res.summary);
+      toast.success("Summary generated!");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to summarize thread.");
+    },
+  });
+
+  // Auto-sync on first load when inbox is empty
+  const hasAutoSynced = useRef(false);
+  useEffect(() => {
+    if (!emailsLoading && emails !== undefined && emails.length === 0 && !hasAutoSynced.current) {
+      hasAutoSynced.current = true;
+      refreshInbox.mutate();
+    }
+  }, [emailsLoading, emails]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Smart replies when message changes
+  useEffect(() => {
+    if (activeMessageId) {
+      setThreadSummary(null);
+      setSmartReplies([]);
+      getSmartReplies.mutate({ messageId: activeMessageId });
+    }
+    // getSmartReplies intentionally excluded to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMessageId]);
+
+  // Reset focused index when emails change
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [emails]);
+
+  // Keyboard shortcuts specific to inbox
+  useShortcuts({
+    "Cmd+ArrowDown": () => {
+      if (emails && focusedIndex < emails.length - 1) {
+        setFocusedIndex((prev) => prev + 1);
+      }
+    },
+    "Cmd+ArrowUp": () => {
+      if (focusedIndex > 0) {
+        setFocusedIndex((prev) => prev - 1);
+      }
+    },
+    "Cmd+Enter": () => {
+      if (emails?.[focusedIndex]) {
+        setActiveMessageId(emails[focusedIndex].id);
+        markRead.mutate({ id: emails[focusedIndex].id, read: true });
+      }
+    },
+    "Cmd+Shift+E": () => {
+      if (emails?.[focusedIndex]) {
+        archiveEmail.mutate({ id: emails[focusedIndex].id });
+      }
+    },
+    "Cmd+Shift+U": () => {
+      if (emails?.[focusedIndex]) {
+        markRead.mutate({ id: emails[focusedIndex].id, read: false });
+        toast.info("Marked as unread");
+      }
+    },
+    "Cmd+Alt+R": (e) => {
+      e.preventDefault();
+      if (selectedMessage) {
+        const replyInput = document.getElementById("reply-input");
+        if (replyInput) replyInput.focus();
+      }
+    },
+    Escape: () => {
+      setActiveMessageId(null);
+    },
+  });
+
+  return (
+    <div className="flex-1 flex overflow-hidden">
+      <InboxList
+        refreshInbox={refreshInbox}
+        setComposeOpen={setComposeOpen}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        inboxTab={inboxTab}
+        setInboxTab={setInboxTab}
+        focusedIndex={focusedIndex}
+        setFocusedIndex={setFocusedIndex}
+        setActiveMessageId={setActiveMessageId}
+        markRead={markRead}
+        archiveEmail={archiveEmail}
+        selectedEmailIds={selectedEmailIds}
+        toggleEmailSelection={toggleEmailSelection}
+        clearSelection={clearSelection}
+        LoaderIcon={LoaderIcon}
+        gmailAuthError={gmailAuthError}
+        onReconnect={() => signIn("google", { callbackUrl: "/dashboard" })}
+      />
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {activeMessageId ? (
+          <ReadingPane
+            messageLoading={messageLoading}
+            selectedMessage={selectedMessage}
+            dailyBriefData={dailyBriefData}
+            createFollowUp={createFollowUp}
+            archiveEmail={archiveEmail}
+            showSnoozeDropdown={showSnoozeDropdown}
+            setShowSnoozeDropdown={setShowSnoozeDropdown}
+            snoozeEmail={snoozeEmail}
+            threadSummary={threadSummary}
+            summarizeThread={summarizeThread}
+            smartReplies={smartReplies}
+            replyBody={replyBody}
+            setReplyBody={setReplyBody}
+            replyToEmail={replyToEmail}
+            LoaderIcon={LoaderIcon}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+            <Mail size={32} className="text-zinc-800 mb-3" />
+            <p className="text-sm font-medium text-zinc-600">Select an email to read</p>
+            <p className="text-xs text-zinc-700 mt-1">Click any message from the list on the left</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
