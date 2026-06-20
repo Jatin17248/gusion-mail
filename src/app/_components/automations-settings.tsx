@@ -10,19 +10,19 @@ export function AutomationsSettingsView() {
   const { data: members } = api.org.listMembers.useQuery();
 
   const [name, setName] = useState("");
-  const [conditions, setConditions] = useState<{ field: string; operator: string; value: string }[]>([
-    { field: "subject", operator: "contains", value: "" },
+  const [conditions, setConditions] = useState<{ id: string; field: string; operator: string; value: string }[]>([
+    { id: crypto.randomUUID(), field: "subject", operator: "contains", value: "" },
   ]);
-  const [actions, setActions] = useState<{ type: string; value: string }[]>([
-    { type: "change_status", value: "pending" },
+  const [actions, setActions] = useState<{ id: string; type: string; value: string }[]>([
+    { id: crypto.randomUUID(), type: "change_status", value: "pending" },
   ]);
 
   const createRule = api.automation.createRule.useMutation({
     onSuccess: () => {
       toast.success("Automation rule created!");
       setName("");
-      setConditions([{ field: "subject", operator: "contains", value: "" }]);
-      setActions([{ type: "change_status", value: "pending" }]);
+      setConditions([{ id: crypto.randomUUID(), field: "subject", operator: "contains", value: "" }]);
+      setActions([{ id: crypto.randomUUID(), type: "change_status", value: "pending" }]);
       void refetchRules();
     },
     onError: (err) => {
@@ -51,7 +51,7 @@ export function AutomationsSettingsView() {
   });
 
   const addCondition = () => {
-    setConditions([...conditions, { field: "subject", operator: "contains", value: "" }]);
+    setConditions([...conditions, { id: crypto.randomUUID(), field: "subject", operator: "contains", value: "" }]);
   };
 
   const removeCondition = (idx: number) => {
@@ -65,7 +65,7 @@ export function AutomationsSettingsView() {
   };
 
   const addAction = () => {
-    setActions([...actions, { type: "change_status", value: "pending" }]);
+    setActions([...actions, { id: crypto.randomUUID(), type: "change_status", value: "pending" }]);
   };
 
   const removeAction = (idx: number) => {
@@ -80,6 +80,8 @@ export function AutomationsSettingsView() {
 
   const handleCreateRule = () => {
     if (!name) return toast.error("Please enter a rule name.");
+    const emptyCondition = conditions.find((c) => !c.value.trim());
+    if (emptyCondition) return toast.error("All condition values must be filled in.");
     createRule.mutate({
       name,
       triggerType: "email_received",
@@ -94,7 +96,7 @@ export function AutomationsSettingsView() {
       <div className="xl:col-span-2 space-y-6">
         <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md text-left space-y-6">
           <div>
-            <h3 className="text-md font-bold text-zinc-200 mb-1 flex items-center gap-2">
+            <h3 className="text-base font-bold text-zinc-200 mb-1 flex items-center gap-2">
               <Sliders size={16} className="text-indigo-400" />
               Build New Automation Rule
             </h3>
@@ -109,7 +111,7 @@ export function AutomationsSettingsView() {
                 placeholder="e.g., Auto-assign Billing tickets"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
               />
             </div>
 
@@ -126,7 +128,7 @@ export function AutomationsSettingsView() {
               </div>
 
               {conditions.map((cond, idx) => (
-                <div key={idx} className="flex gap-2 items-center bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-855">
+                <div key={cond.id} className="flex gap-2 items-center bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-800">
                   <select
                     value={cond.field}
                     onChange={(e) => updateCondition(idx, "field", e.target.value)}
@@ -182,7 +184,7 @@ export function AutomationsSettingsView() {
               </div>
 
               {actions.map((act, idx) => (
-                <div key={idx} className="flex gap-2 items-start bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-855">
+                <div key={act.id} className="flex gap-2 items-start bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-800">
                   <select
                     value={act.type}
                     onChange={(e) => updateAction(idx, "type", e.target.value)}
@@ -276,7 +278,7 @@ export function AutomationsSettingsView() {
 
         {/* Existing Rules List */}
         <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md text-left space-y-4">
-          <h3 className="text-md font-bold text-zinc-200 flex items-center gap-2">
+          <h3 className="text-base font-bold text-zinc-200 flex items-center gap-2">
             <SlidersHorizontal size={16} className="text-indigo-400" />
             Configured Rules
           </h3>
@@ -292,7 +294,7 @@ export function AutomationsSettingsView() {
                 return (
                   <div
                     key={rule.id}
-                    className="p-4 rounded-xl border border-zinc-855 bg-zinc-950/40 flex items-start justify-between gap-4"
+                    className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 flex items-start justify-between gap-4"
                   >
                     <div className="space-y-2 min-w-0">
                       <div className="flex items-center gap-2">
@@ -308,7 +310,7 @@ export function AutomationsSettingsView() {
 
                       <div className="text-[10px] text-zinc-400 space-y-1">
                         <div>
-                          <span className="text-zinc-550 font-bold">Conditions:</span>{" "}
+                          <span className="text-zinc-500 font-bold">Conditions:</span>{" "}
                           {conds.map((c, i) => (
                             <span key={i} className="bg-zinc-900 px-1 py-0.5 rounded text-zinc-300 mr-1">
                               {c.field} {c.operator} &quot;{c.value}&quot;
@@ -316,9 +318,9 @@ export function AutomationsSettingsView() {
                           ))}
                         </div>
                         <div>
-                          <span className="text-zinc-550 font-bold">Actions:</span>{" "}
+                          <span className="text-zinc-500 font-bold">Actions:</span>{" "}
                           {acts.map((a, i) => (
-                            <span key={i} className="bg-indigo-950/20 px-1 py-0.5 rounded text-indigo-350 mr-1 border border-indigo-500/10">
+                            <span key={i} className="bg-indigo-950/20 px-1 py-0.5 rounded text-indigo-400 mr-1 border border-indigo-500/10">
                               {a.type} &rarr; {a.value}
                             </span>
                           ))}
@@ -351,7 +353,7 @@ export function AutomationsSettingsView() {
 
       {/* Runs Log */}
       <div className="p-6 rounded-2xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-md text-left space-y-4 h-full xl:sticky xl:top-6">
-        <h3 className="text-md font-bold text-zinc-200 flex items-center gap-2">
+        <h3 className="text-base font-bold text-zinc-200 flex items-center gap-2">
           <Activity size={16} className="text-indigo-400" />
           Automation Runs Log
         </h3>
@@ -360,7 +362,7 @@ export function AutomationsSettingsView() {
         {!runsList || runsList.length === 0 ? (
           <p className="text-xs text-zinc-500 italic">No automation executions recorded yet.</p>
         ) : (
-          <div className="space-y-3 max-h-125 overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[31.25rem] overflow-y-auto pr-1">
             {runsList.map((run) => (
               <div
                 key={run.id}
@@ -371,7 +373,9 @@ export function AutomationsSettingsView() {
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-zinc-300">Rule triggered</span>
+                  <span className="font-bold text-zinc-300 truncate max-w-[70%]">
+                    {(run as { ruleName?: string }).ruleName ?? "Rule triggered"}
+                  </span>
                   <span
                     className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase ${
                       run.status === "success"
@@ -386,7 +390,7 @@ export function AutomationsSettingsView() {
                   Date: {new Date(run.createdAt).toLocaleString()}
                 </div>
                 {run.error && (
-                  <div className="text-[10px] text-rose-450 mt-1 bg-rose-500/10 p-1.5 rounded">
+                  <div className="text-[10px] text-rose-400 mt-1 bg-rose-500/10 p-1.5 rounded">
                     Error: {run.error}
                   </div>
                 )}

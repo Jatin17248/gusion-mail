@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
-import { FaMeta } from "react-icons/fa6";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -30,23 +29,10 @@ const LoginForm = () => {
       });
 
       if (result?.error) {
-        setError(result.error);
+        setError("Incorrect email or password. Please try again.");
       } else if (result?.ok) {
-        // Check if user has completed onboarding
-        try {
-          const statusResponse = await fetch('/api/user/status');
-          const statusData = await statusResponse.json();
-
-          // Redirect based on onboarding status
-          if (statusData.onboardingCompleted) {
-            router.push('/dashboard');
-          } else {
-            router.push('/onboarding');
-          }
-        } catch (err) {
-          console.error('Error checking onboarding status:', err);
-          router.push('/dashboard');
-        }
+        router.push('/dashboard');
+        router.refresh();
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -145,25 +131,16 @@ const LoginForm = () => {
         </div>
 
         {/* Social providers */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <Button
             type="button"
             variant="outline"
             onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-            className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
+            className="h-12 w-full col-span-2 rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group flex items-center gap-2 justify-center"
             aria-label="Sign in with Google"
           >
             <FcGoogle size={22} className="group-hover:scale-110 transition-transform duration-300" />
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
-            className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
-            aria-label="Sign in with Meta"
-          >
-            <FaMeta size={22} className="text-[#0668E1] group-hover:scale-110 transition-transform duration-300" />
+            <span className="text-sm font-medium text-neutral-600">Continue with Google</span>
           </Button>
         </div>
 

@@ -11,6 +11,8 @@ import { ReadingPane } from "@/app/_components/dashboard/reading-pane";
 import { useDashboard } from "@/app/dashboard/_context/dashboard-context";
 import { useShortcuts } from "@/app/_hooks/use-shortcuts";
 
+const PAGE_SIZE = 25;
+
 function LoaderIcon() {
   return <Loader2 size={16} className="animate-spin text-zinc-500" />;
 }
@@ -24,6 +26,7 @@ export default function InboxPage() {
 
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
@@ -40,6 +43,11 @@ export default function InboxPage() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Reset limit when search or tab changes
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [debouncedSearch, inboxTab]);
+
   const toggleEmailSelection = (id: string) => {
     setSelectedEmailIds((prev) => {
       const newSet = new Set(prev);
@@ -51,8 +59,9 @@ export default function InboxPage() {
 
   const clearSelection = () => setSelectedEmailIds(new Set());
 
-  const { data: emails, isLoading: emailsLoading } = api.gmail.searchEmails.useQuery(
-    { query: debouncedSearch, limit: 30, tab: inboxTab },
+  // Single source-of-truth for email list — shared with InboxList via props
+  const { data: emails = [], isLoading: emailsLoading, isFetching } = api.gmail.searchEmails.useQuery(
+    { query: debouncedSearch, limit, tab: inboxTab },
     { retry: false, staleTime: 30000 }
   );
 
@@ -94,7 +103,7 @@ export default function InboxPage() {
       toast.info("Archived message", {
         action: {
           label: "Undo",
-          onClick: () => toast.info("Undo Send not supported in preview"),
+          onClick: () => toast.info("Undo not supported in preview"),
         },
       });
       if (activeMessageId === id) {
@@ -129,7 +138,7 @@ export default function InboxPage() {
 
   const createFollowUp = api.gmail.createFollowUp.useMutation({
     onSuccess: () => {
-      toast.success("Follow-up reminder set for 2 days from now!");
+      toast.success("Follow-up reminder set!");
     },
     onError: (err) => {
       toast.error(err.message || "Failed to set follow-up reminder.");
@@ -158,7 +167,7 @@ export default function InboxPage() {
   // Auto-sync on first load when inbox is empty
   const hasAutoSynced = useRef(false);
   useEffect(() => {
-    if (!emailsLoading && emails !== undefined && emails.length === 0 && !hasAutoSynced.current) {
+    if (!emailsLoading && emails.length === 0 && !hasAutoSynced.current) {
       hasAutoSynced.current = true;
       refreshInbox.mutate();
     }
@@ -171,7 +180,6 @@ export default function InboxPage() {
       setSmartReplies([]);
       getSmartReplies.mutate({ messageId: activeMessageId });
     }
-    // getSmartReplies intentionally excluded to avoid infinite loop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMessageId]);
 
@@ -180,10 +188,10 @@ export default function InboxPage() {
     setFocusedIndex(0);
   }, [emails]);
 
-  // Keyboard shortcuts specific to inbox
+  // Keyboard shortcuts — operate on the same emails array that InboxList renders
   useShortcuts({
     "Cmd+ArrowDown": () => {
-      if (emails && focusedIndex < emails.length - 1) {
+      if (focusedIndex < emails.length - 1) {
         setFocusedIndex((prev) => prev + 1);
       }
     },
@@ -193,19 +201,20 @@ export default function InboxPage() {
       }
     },
     "Cmd+Enter": () => {
-      if (emails?.[focusedIndex]) {
-        setActiveMessageId(emails[focusedIndex].id);
-        markRead.mutate({ id: emails[focusedIndex].id, read: true });
+      const email = emails[focusedIndex];
+      if (email) {
+        setActiveMessageId(email.id);
+        markRead.mutate({ id: email.id, read: true });
       }
     },
     "Cmd+Shift+E": () => {
-      if (emails?.[focusedIndex]) {
-        archiveEmail.mutate({ id: emails[focusedIndex].id });
-      }
+      const email = emails[focusedIndex];
+      if (email) archiveEmail.mutate({ id: email.id });
     },
     "Cmd+Shift+U": () => {
-      if (emails?.[focusedIndex]) {
-        markRead.mutate({ id: emails[focusedIndex].id, read: false });
+      const email = emails[focusedIndex];
+      if (email) {
+        markRead.mutate({ id: email.id, read: false });
         toast.info("Marked as unread");
       }
     },
@@ -224,6 +233,11 @@ export default function InboxPage() {
   return (
     <div className="flex-1 flex overflow-hidden">
       <InboxList
+        emails={emails}
+        isLoading={emailsLoading}
+        isFetching={isFetching}
+        canLoadMore={emails.length >= limit}
+        onLoadMore={() => setLimit((prev) => prev + PAGE_SIZE)}
         refreshInbox={refreshInbox}
         setComposeOpen={setComposeOpen}
         searchQuery={searchQuery}
@@ -263,9 +277,9 @@ export default function InboxPage() {
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <Mail size={32} className="text-zinc-800 mb-3" />
-            <p className="text-sm font-medium text-zinc-600">Select an email to read</p>
-            <p className="text-xs text-zinc-700 mt-1">Click any message from the list on the left</p>
+            <Mail size={32} className="text-zinc-600 mb-3" />
+            <p className="text-sm font-medium text-zinc-400">Select an email to read</p>
+            <p className="text-xs text-zinc-500 mt-1">Click any message from the list on the left</p>
           </div>
         )}
       </div>

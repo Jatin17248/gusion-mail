@@ -7,7 +7,7 @@ import { api } from "@/trpc/react";
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 interface MiniCalendarWidgetProps {
-  onNavigateToCalendar: () => void;
+  onNavigateToCalendar: (date?: Date) => void;
 }
 
 export function MiniCalendarWidget({ onNavigateToCalendar }: MiniCalendarWidgetProps) {
@@ -106,7 +106,7 @@ export function MiniCalendarWidget({ onNavigateToCalendar }: MiniCalendarWidgetP
           return (
             <button
               key={`day-${day}`}
-              onClick={onNavigateToCalendar}
+              onClick={() => onNavigateToCalendar(new Date(year, month, day))}
               className={`relative flex flex-col items-center justify-center py-1 rounded-lg cursor-pointer transition text-[11px] font-medium group ${
                 isToday
                   ? "bg-indigo-600 text-white shadow-sm"
@@ -142,7 +142,7 @@ export function MiniCalendarWidget({ onNavigateToCalendar }: MiniCalendarWidgetP
               : "No events this month"}
           </span>
           <button
-            onClick={onNavigateToCalendar}
+            onClick={() => onNavigateToCalendar()}
             className="text-[10px] font-medium text-indigo-500 hover:text-indigo-400 transition cursor-pointer"
           >
             Full calendar →

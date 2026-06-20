@@ -91,7 +91,7 @@ export function ShortcutTutorial() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-100 w-80 p-5 rounded-2xl border border-indigo-500/30 bg-zinc-950/90 backdrop-blur-xl shadow-2xl shadow-indigo-500/10 transition-all duration-500">
+    <div className="fixed bottom-6 right-6 z-[100] w-80 p-5 rounded-2xl border border-indigo-500/30 bg-zinc-950/90 backdrop-blur-xl shadow-2xl shadow-indigo-500/10 transition-all duration-500">
       <button 
         onClick={() => {
           localStorage.setItem("gusion_tutorial_completed", "true");

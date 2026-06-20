@@ -459,7 +459,11 @@ export function CalendarView({
                                   </a>
                                 ) : null}
                                 <button
-                                  onClick={() => deleteEvent.mutate({ id: event.id })}
+                                  onClick={() => {
+                                    if (confirm(`Delete "${event.summary}"? This cannot be undone.`)) {
+                                      deleteEvent.mutate({ id: event.id });
+                                    }
+                                  }}
                                   className="rounded-lg p-2 text-zinc-500 transition hover:bg-rose-500/10 hover:text-rose-300"
                                   title="Delete event"
                                 >

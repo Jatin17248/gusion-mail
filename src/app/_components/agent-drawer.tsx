@@ -53,24 +53,17 @@ interface ToolInvPart {
 
 export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const historyLoadedRef = useRef(false);
 
-  // tRPC query to fetch initial history
+  // tRPC query to fetch initial history — only once per open, no background refetches
   const { data: history } = api.agent.getHistory.useQuery(
     undefined,
     {
       enabled: open,
       refetchOnWindowFocus: false,
+      staleTime: Infinity,
     }
   );
-
-  const clearHistoryMutation = api.agent.clearHistory.useMutation({
-    onSuccess: () => {
-      setMessages([]);
-      toast.success("Chat history cleared");
-    },
-  });
-
-  const [input, setInput] = React.useState("");
 
   const {
     messages,
@@ -83,28 +76,35 @@ export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
     }),
   });
 
+  const clearHistoryMutation = api.agent.clearHistory.useMutation({
+    onSuccess: () => {
+      setMessages([]);
+      historyLoadedRef.current = false;
+      toast.success("Chat history cleared");
+    },
+  });
+
+  const [input, setInput] = React.useState("");
+
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load history into useChat when drawer opens and history is loaded
+  // Load history into useChat only on first open — not on every refetch
   useEffect(() => {
-    if (history) {
-      // Filter out tool messages as their results are rendered in the assistant message parts
+    if (history && !historyLoadedRef.current && messages.length === 0) {
+      historyLoadedRef.current = true;
       const filtered = history.filter((h) => h.role !== "tool");
-      setMessages(
-        filtered.map((h) => ({
-          id: h.id,
-          role: h.role as "user" | "assistant" | "system",
-          parts: [
-            {
-              type: "text" as const,
-              text: h.content,
-            },
-          ],
-          createdAt: new Date(h.createdAt),
-        }))
-      );
+      if (filtered.length > 0) {
+        setMessages(
+          filtered.map((h) => ({
+            id: h.id,
+            role: h.role as "user" | "assistant" | "system",
+            parts: [{ type: "text" as const, text: h.content }],
+            createdAt: new Date(h.createdAt),
+          }))
+        );
+      }
     }
-  }, [history, setMessages]);
+  }, [history, messages.length, setMessages]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -118,7 +118,7 @@ export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
       {/* Header */}
       <div className="p-4 border-b border-zinc-900 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="text-indigo-400 animate-pulse" size={18} />
+          <Sparkles className={`text-indigo-400 ${isLoading ? "animate-pulse" : ""}`} size={18} />
           <h2 className="text-sm font-bold text-zinc-100">Gusion AI Assistant</h2>
         </div>
         <div className="flex items-center gap-1">
@@ -222,20 +222,31 @@ export function AgentDrawer({ open, onClose }: AgentDrawerProps) {
           void sendMessage({ text: input });
           setInput("");
         }}
-        className="p-3 border-t border-zinc-900 bg-zinc-950 flex gap-2"
+        className="p-3 border-t border-zinc-900 bg-zinc-950 flex flex-col gap-2"
       >
-        <input
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask Gusion to reply, schedule, search..."
-          className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-850 rounded-xl text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (input.trim() && !isLoading) {
+                void sendMessage({ text: input });
+                setInput("");
+              }
+            }
+          }}
+          placeholder="Ask Gusion to reply, schedule, search... (Shift+Enter for new line)"
+          rows={3}
+          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 transition resize-none"
         />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
+          className="self-end px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
         >
-          <Send size={14} />
+          <Send size={12} />
+          Send
         </button>
       </form>
     </aside>

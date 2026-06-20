@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Mail, Lock, Eye, EyeOff, User, Phone } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
-import { FaMeta } from "react-icons/fa6";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -44,11 +43,7 @@ const RegisterForm = () => {
       });
 
       if (res.status === 409) {
-        setServerError("User already exists with this email or phone number");
-        alert(
-          "An account already exists with this email or phone number. Please log in to continue."
-        );
-        router.push("/login");
+        setServerError("An account already exists with this email. Please sign in instead.");
         return;
       }
 
@@ -203,16 +198,29 @@ const RegisterForm = () => {
         </div>
 
         {/* Terms & Conditions */}
-        <div className="flex items-start gap-2 text-xs">
-          <p className="text-gray-600">
-            By continuing, I agree to the{" "}
+        <div className="flex items-start gap-2.5 text-xs">
+          <input
+            type="checkbox"
+            id="terms"
+            required
+            className="mt-0.5 h-4 w-4 rounded border-neutral-300 accent-indigo-600 cursor-pointer shrink-0"
+          />
+          <label htmlFor="terms" className="text-gray-600 leading-relaxed cursor-pointer">
+            I agree to the{" "}
             <Link
-              className="text-[#e61f2a] underline hover:text-[#cf1a24] transition-colors"
+              className="text-indigo-600 underline hover:text-indigo-700 transition-colors"
               href="/terms"
             >
-              Terms of Service and Privacy Policy.
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link
+              className="text-indigo-600 underline hover:text-indigo-700 transition-colors"
+              href="/privacy"
+            >
+              Privacy Policy
             </Link>
-          </p>
+          </label>
         </div>
 
         {/* Primary CTA */}
@@ -237,25 +245,16 @@ const RegisterForm = () => {
         </div>
 
         {/* Social providers */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <Button
             type="button"
             variant="outline"
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-            className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
+            onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+            className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group flex items-center gap-2 justify-center"
             aria-label="Sign up with Google"
           >
             <FcGoogle size={22} className="group-hover:scale-110 transition-transform duration-300" />
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => signIn("facebook", { callbackUrl: "/dashboard" })}
-            className="h-12 w-full rounded-2xl border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-300 active:scale-95 group"
-            aria-label="Sign up with Meta"
-          >
-            <FaMeta size={22} className="text-[#0668E1] group-hover:scale-110 transition-transform duration-300" />
+            <span className="text-sm font-medium text-neutral-600">Continue with Google</span>
           </Button>
         </div>
 

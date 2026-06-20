@@ -66,6 +66,7 @@ function SafeHtmlRenderer({ html }: { html: string }) {
 
   const sanitized = DOMPurify.sanitize(html, {
     ADD_ATTR: ["target"],
+    FORBID_TAGS: ["script", "style"],
   });
 
   const srcDocHtml = `
@@ -105,6 +106,7 @@ function SafeHtmlRenderer({ html }: { html: string }) {
       <iframe
         ref={iframeRef}
         srcDoc={srcDocHtml}
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         style={{
           width: "100%",
           height,
@@ -413,8 +415,7 @@ export function ReadingPane({
                 <div className="flex justify-end">
                   <button
                     onClick={() => {
-                      const parentIdMatch = /Message-ID:\s*<([^>]+)>/i.exec(selectedMessage.body);
-                      const inReplyTo = parentIdMatch ? `<${parentIdMatch[1]!}>` : `<parent_message_id_placeholder>`;
+                      const inReplyTo = selectedMessage.messageId || selectedMessage.id;
                       replyToEmail.mutate({
                         to: parseEmailAddress(selectedMessage.from).email,
                         subject: selectedMessage.subject,

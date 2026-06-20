@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Loader2 } from "lucide-react";
 
 export function TemplatesSettingsView() {
-  const { data: templates, refetch } = api.template.listTemplates.useQuery();
+  const { data: templates, refetch, isLoading: templatesLoading } = api.template.listTemplates.useQuery();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,7 +52,12 @@ export function TemplatesSettingsView() {
   };
 
   const startEdit = (t: { id: string; name: string; shortcut: string; subject: string | null; body: string }) => {
+    const isDirty = name !== "" || shortcut !== "" || subject !== "" || body !== "";
+    if ((isCreating || editingId) && isDirty && editingId !== t.id) {
+      if (!confirm("You have unsaved changes. Discard them and edit this template instead?")) return;
+    }
     setEditingId(t.id);
+    setIsCreating(false);
     setName(t.name);
     setShortcut(t.shortcut);
     setSubject(t.subject ?? "");
@@ -91,7 +96,7 @@ export function TemplatesSettingsView() {
 
       {(isCreating || editingId) && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
-          <h4 className="text-md font-medium text-white">{editingId ? "Edit Template" : "New Template"}</h4>
+          <h4 className="text-base font-medium text-white">{editingId ? "Edit Template" : "New Template"}</h4>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -164,12 +169,17 @@ export function TemplatesSettingsView() {
       )}
 
       <div className="space-y-3">
-        {templates?.length === 0 && !isCreating && (
+        {templatesLoading && (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+          </div>
+        )}
+        {!templatesLoading && templates?.length === 0 && !isCreating && (
           <div className="bg-zinc-900 border border-zinc-800 border-dashed rounded-xl p-8 text-center">
             <p className="text-zinc-500 text-sm">No templates yet. Create one to type faster.</p>
           </div>
         )}
-        
+
         {templates?.map((t) => (
           <div key={t.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between group">
             <div className="space-y-1 overflow-hidden w-full">

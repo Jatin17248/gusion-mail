@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
@@ -62,10 +63,26 @@ function parseAttendeeEmails(input: string) {
   return input.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-export default function CalendarPage() {
+function CalendarPageInner() {
   const utils = api.useUtils();
+  const searchParams = useSearchParams();
 
-  const [weekOffset, setWeekOffset] = useState(0);
+  const initialWeekOffset = useMemo(() => {
+    const dateParam = searchParams.get("date");
+    if (!dateParam) return 0;
+    const target = new Date(dateParam);
+    if (isNaN(target.getTime())) return 0;
+    const now = new Date();
+    const nowSunday = new Date(now);
+    nowSunday.setDate(now.getDate() - now.getDay());
+    nowSunday.setHours(0, 0, 0, 0);
+    const targetSunday = new Date(target);
+    targetSunday.setDate(target.getDate() - target.getDay());
+    targetSunday.setHours(0, 0, 0, 0);
+    return Math.round((targetSunday.getTime() - nowSunday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  }, [searchParams]);
+
+  const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
   const [createEventOpen, setCreateEventOpen] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
   const [eventDesc, setEventDesc] = useState("");
@@ -192,9 +209,7 @@ export default function CalendarPage() {
     if (!startAt) nextErrors.start = "Choose a valid start date and time.";
     if (!endAt) nextErrors.end = "Choose a valid end date and time.";
     if (startAt && endAt && endAt <= startAt) nextErrors.end = "End time must be after the start time.";
-    if (attendeesList.length === 0) {
-      nextErrors.attendees = "Add at least one attendee email.";
-    } else if (invalidAttendees.length > 0) {
+    if (invalidAttendees.length > 0) {
       nextErrors.attendees = `Fix invalid email${invalidAttendees.length > 1 ? "s" : ""}: ${invalidAttendees.join(", ")}`;
     }
 
@@ -238,7 +253,7 @@ export default function CalendarPage() {
             >
               <X size={18} />
             </button>
-            <h3 className="text-md font-bold text-white">Create Calendar Event</h3>
+            <h3 className="text-base font-bold text-white">Create Calendar Event</h3>
             <div className="space-y-3 text-left">
               <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-3 space-y-2">
                 <label className="block text-[11px] font-bold text-indigo-300 uppercase tracking-[0.18em]">
@@ -404,5 +419,13 @@ export default function CalendarPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense>
+      <CalendarPageInner />
+    </Suspense>
   );
 }

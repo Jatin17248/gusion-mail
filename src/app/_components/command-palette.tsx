@@ -61,8 +61,13 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
               onValueChange={setValue}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && value.trim()) {
-                  // If it's a command search or custom query filter, execute search
                   e.preventDefault();
+                  try {
+                    const existing = JSON.parse(localStorage.getItem("recent_searches") ?? "[]") as string[];
+                    const updated = [value.trim(), ...existing.filter((s) => s !== value.trim())].slice(0, 10);
+                    localStorage.setItem("recent_searches", JSON.stringify(updated));
+                    setRecentSearches(updated);
+                  } catch {}
                   onAction("search", value);
                   setOpen(false);
                 }
@@ -143,18 +148,18 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
 
             <Command.Group heading="Email Search Filters" className="px-2 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
               <Command.Item
-                onSelect={() => setValue("/from:")}
+                onSelect={() => setValue("from:")}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer hover:bg-zinc-800 hover:text-white"
               >
                 <Filter size={14} className="text-zinc-500" />
-                <span>Filter by Sender (/from:name)</span>
+                <span>Filter by Sender (from:name)</span>
               </Command.Item>
               <Command.Item
-                onSelect={() => setValue("/subject:")}
+                onSelect={() => setValue("subject:")}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer hover:bg-zinc-800 hover:text-white"
               >
                 <Filter size={14} className="text-zinc-500" />
-                <span>Filter by Subject (/subject:text)</span>
+                <span>Filter by Subject (subject:text)</span>
               </Command.Item>
               <Command.Item
                 onSelect={() => setValue("/has:attachment")}

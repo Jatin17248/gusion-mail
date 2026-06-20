@@ -39,6 +39,7 @@ interface MappedMessage {
 interface MessageDetails {
   id: string;
   threadId: string;
+  messageId: string;
   subject: string;
   from: string;
   to: string;
@@ -260,6 +261,7 @@ export const gmailRouter = createTRPCRouter({
         const result: MessageDetails = {
           id: message.id ?? input.id,
           threadId: message.threadId ?? "",
+          messageId: getHeader(headers, "Message-ID"),
           subject: getHeader(headers, "Subject"),
           from: getHeader(headers, "From"),
           to: getHeader(headers, "To"),

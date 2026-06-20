@@ -29,6 +29,7 @@ export function ContactsSidePanel({ email, name }: { email: string; name: string
     },
     onError: (err) => {
       toast.error(err.message || "Failed to add contact.");
+      setIsAdding(false);
     },
   });
 

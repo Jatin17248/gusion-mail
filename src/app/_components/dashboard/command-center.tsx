@@ -32,7 +32,7 @@ const QUICK_ACTIONS = [
   { label: "Priority emails", icon: Star, prompt: "Which emails need my immediate attention right now?" },
   { label: "Compose email", icon: PenLine, prompt: "Help me compose a new email. Ask me who to send it to and what to say." },
   { label: "Schedule meeting", icon: Calendar, prompt: "Help me schedule a meeting. Ask me for the details." },
-  { label: "Search inbox", icon: Search, prompt: "Search my emails for " },
+  { label: "Search inbox", icon: Search, prompt: "Search my inbox. Ask me what to search for." },
   { label: "Quick reply", icon: Zap, prompt: "Draft a quick reply to the most recent email in my inbox." },
 ];
 
@@ -52,7 +52,8 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const historyLoadedRef = useRef(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
 
   // Session management (persisted to localStorage)
   const [sessionId, setSessionId] = useState<string>(() => {
@@ -154,6 +155,22 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
   useEffect(() => {
     setHighlightedIdx(0);
   }, [showMentionDropdown, showTemplateDropdown, mentionQuery, templateQuery]);
+
+  useEffect(() => {
+    if (!showMentionDropdown && !showTemplateDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const inMention = mentionDropdownRef.current?.contains(target);
+      const inTemplate = templateDropdownRef.current?.contains(target);
+      const inInput = inputRef.current?.contains(target);
+      if (!inMention && !inTemplate && !inInput) {
+        setShowMentionDropdown(false);
+        setShowTemplateDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMentionDropdown, showTemplateDropdown]);
 
   const startNewChat = () => {
     const newId = crypto.randomUUID();
@@ -511,7 +528,7 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
             {/* @ Contact dropdown */}
             {showMentionDropdown && filteredContacts.length > 0 && (
               <div
-                ref={dropdownRef}
+                ref={mentionDropdownRef}
                 className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
               >
                 <div className="px-3 py-1.5 border-b border-zinc-800">
@@ -540,7 +557,7 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
             {/* / Template dropdown */}
             {showTemplateDropdown && filteredTemplates.length > 0 && (
               <div
-                ref={dropdownRef}
+                ref={templateDropdownRef}
                 className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50"
               >
                 <div className="px-3 py-1.5 border-b border-zinc-800">

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { useSession, signOut, signIn } from "next-auth/react";
 import { api } from "@/trpc/react";
@@ -69,7 +71,7 @@ export function Onboarding() {
       </header>
 
       <div className="flex-1 flex flex-col justify-center items-center p-6">
-      <div className="absolute top-0 left-1/4 w-125 h-125 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-[31.25rem] h-[31.25rem] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="w-full max-w-md p-8 rounded-2xl border border-zinc-900 bg-zinc-900/30 backdrop-blur-md shadow-2xl relative">
         {status === "idle" && (

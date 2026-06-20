@@ -48,7 +48,9 @@ export function EmailSidePanel({
     }
   }, [activeMessageId]);
 
-  const hasMore = emails.length >= limit;
+  // Track whether last full-page fetch returned a complete page.
+  // If emails.length < limit, there's nothing more to load.
+  const hasMore = emails.length > 0 && emails.length >= limit;
 
   if (gmailAuthError) {
     return (
@@ -139,7 +141,7 @@ export function EmailSidePanel({
                         >
                           {sender}
                         </span>
-                        <span className="text-[9px] text-zinc-700 shrink-0">
+                        <span className="text-[10px] text-zinc-500 shrink-0">
                           {formatMessageDate(email.date)}
                         </span>
                       </div>

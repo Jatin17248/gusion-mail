@@ -1,14 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Search, Plus, RefreshCw, Star, WifiOff, Loader2 } from "lucide-react";
 import { formatMessageDate, parseEmailAddress } from "@/app/_components/dashboard";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 
-const PAGE_SIZE = 25;
+interface Email {
+  id: string;
+  threadId: string;
+  snippet: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string | null;
+  timestamp: number;
+  priority?: string;
+  category?: string;
+}
 
 interface InboxListProps {
+  emails: Email[];
+  isLoading: boolean;
+  isFetching: boolean;
+  canLoadMore: boolean;
+  onLoadMore: () => void;
   refreshInbox: { mutate: () => void; isPending: boolean };
   setComposeOpen: (open: boolean) => void;
   searchQuery: string;
@@ -32,6 +48,11 @@ interface InboxListProps {
 }
 
 export function InboxList({
+  emails,
+  isLoading,
+  isFetching,
+  canLoadMore,
+  onLoadMore,
   refreshInbox,
   setComposeOpen,
   searchQuery,
@@ -52,12 +73,6 @@ export function InboxList({
   const utils = api.useUtils();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [limit, setLimit] = useState(PAGE_SIZE);
-
-  const { data: emails = [], isLoading, isFetching } = api.gmail.searchEmails.useQuery(
-    { query: searchQuery, limit, tab: inboxTab },
-    { retry: false, staleTime: 30000 }
-  );
 
   const createSavedSearch = api.search.createSavedSearch.useMutation({
     onSuccess: () => {
@@ -67,11 +82,6 @@ export function InboxList({
     onError: () => toast.error("Failed to save search"),
   });
 
-  // Reset limit when tab or search changes
-  useEffect(() => {
-    setLimit(PAGE_SIZE);
-  }, [inboxTab, searchQuery]);
-
   // Infinite scroll: observe sentinel relative to the scroll container (not the viewport)
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -80,8 +90,8 @@ export function InboxList({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting && !isFetching && emails.length >= limit) {
-          setLimit((prev) => prev + PAGE_SIZE);
+        if (entry?.isIntersecting && !isFetching && canLoadMore) {
+          onLoadMore();
         }
       },
       { root, rootMargin: "150px" }
@@ -89,7 +99,7 @@ export function InboxList({
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [isFetching, emails.length, limit]);
+  }, [isFetching, canLoadMore, onLoadMore]);
 
   return (
     <section className="w-105 shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
@@ -97,7 +107,7 @@ export function InboxList({
       <div className="p-4 border-b border-zinc-900 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-md font-semibold text-zinc-200">Inbox</h2>
+            <h2 className="text-sm font-semibold text-zinc-200">Inbox</h2>
             {emails.length > 0 && (
               <span className="text-[10px] text-zinc-600 font-medium">({emails.length})</span>
             )}
@@ -125,7 +135,7 @@ export function InboxList({
           <Search className="absolute left-2.5 h-4 w-4 text-zinc-500" />
           <input
             type="text"
-            placeholder="Search mail (e.g. subject, body)..."
+            placeholder="Search mail..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -212,8 +222,16 @@ export function InboxList({
             </button>
           </div>
         ) : emails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-zinc-500">
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-2">
             <span className="text-xs">No emails found</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="text-xs text-indigo-400 hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -227,13 +245,11 @@ export function InboxList({
                 }}
                 className={`p-4 cursor-pointer text-left transition relative group ${
                   focusedIndex === idx
-                    ? "bg-indigo-500/5 border-l-2 border-indigo-500"
-                    : idx % 2 === 0
-                    ? "bg-zinc-900/5"
-                    : "bg-transparent"
+                    ? "bg-indigo-500/8 border-l-2 border-indigo-500"
+                    : "border-l-2 border-transparent"
                 } hover:bg-zinc-900/20 ${selectedEmailIds.has(email.id) ? "bg-indigo-500/10" : ""}`}
               >
-                <div className="absolute left-2 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute left-3 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
                   <input
                     type="checkbox"
                     checked={selectedEmailIds.has(email.id)}
@@ -261,11 +277,6 @@ export function InboxList({
                           {email.priority}
                         </span>
                       )}
-                      {email.category === "important" && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                          Important
-                        </span>
-                      )}
                     </div>
                     <span className="text-[10px] text-zinc-500 whitespace-nowrap shrink-0">
                       {formatMessageDate(email.date)}
@@ -274,14 +285,14 @@ export function InboxList({
                   <h4 className="text-xs font-semibold text-zinc-200 truncate mb-1">
                     {email.subject || "(No Subject)"}
                   </h4>
-                  <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                  <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
                     {email.snippet}
                   </p>
                 </div>
               </div>
             ))}
 
-            {/* Infinite scroll sentinel + loading indicator */}
+            {/* Infinite scroll sentinel */}
             <div ref={sentinelRef} className="py-4 flex items-center justify-center">
               {isFetching && (
                 <div className="flex items-center gap-2 text-xs text-zinc-600">

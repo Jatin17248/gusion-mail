@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
       {/* Right panel: mini calendar + email list */}
       <div className="w-80 shrink-0 border-l border-zinc-900 flex flex-col overflow-hidden bg-zinc-950">
-        <MiniCalendarWidget onNavigateToCalendar={() => router.push("/dashboard/calendar")} />
+        <MiniCalendarWidget onNavigateToCalendar={(date) => router.push(date ? `/dashboard/calendar?date=${date.toISOString()}` : "/dashboard/calendar")} />
         <EmailSidePanel
           onEmailClick={(id) => {
             setActiveMessageId(id);
