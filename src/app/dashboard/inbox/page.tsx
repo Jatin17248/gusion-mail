@@ -19,7 +19,7 @@ function LoaderIcon() {
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
-  const { setComposeOpen } = useDashboard();
+  const { setComposeOpen, openUpgrade } = useDashboard();
   const utils = api.useUtils();
 
   const initialMsg = searchParams.get("msg");
@@ -177,8 +177,11 @@ export default function InboxPage() {
     onSuccess: (res) => {
       setSmartReplies(res.replies);
     },
-    onError: () => {
+    onError: (err) => {
       setSmartReplies([]);
+      if (err.message?.includes("premium")) {
+        openUpgrade("AI smart replies are a Gusion Pro feature.");
+      }
     },
   });
 
@@ -188,7 +191,11 @@ export default function InboxPage() {
       toast.success("Summary generated!");
     },
     onError: (err) => {
-      toast.error(err.message || "Failed to summarize thread.");
+      if (err.message?.includes("premium")) {
+        openUpgrade("AI thread summaries are a Gusion Pro feature.");
+      } else {
+        toast.error(err.message || "Failed to summarize thread.");
+      }
     },
   });
 
@@ -253,6 +260,25 @@ export default function InboxPage() {
         if (replyInput) replyInput.focus();
       }
     },
+    // Single-key triage (auto-ignored while typing in inputs/textareas)
+    j: () => {
+      if (focusedIndex < emails.length - 1) setFocusedIndex((prev) => prev + 1);
+    },
+    k: () => {
+      if (focusedIndex > 0) setFocusedIndex((prev) => prev - 1);
+    },
+    Enter: () => {
+      const email = emails[focusedIndex];
+      if (email) {
+        setActiveMessageId(email.id);
+        markRead.mutate({ id: email.id, read: true });
+      }
+    },
+    e: () => {
+      const email = emails[focusedIndex];
+      if (email) archiveEmail.mutate({ id: email.id });
+    },
+    c: () => setComposeOpen(true),
     Escape: () => {
       setActiveMessageId(null);
     },

@@ -80,18 +80,32 @@ Rules:
       await verifyPremium(ctx.session.user.id);
       trackEvent(ctx.session.user.id, "ai_compose_triggered", { promptLength: input.prompt.length });
 
-      const systemPrompt = `You are an expert AI email writer. Generate a clear, concise, and professional email based on the instructions.
-${input.tone ? `Tone: ${input.tone}` : ""}
-${input.styleContext ? `Writing Style / Context: ${input.styleContext}` : ""}`;
+      const userName = ctx.session.user.name ?? "";
+
+      const systemPrompt = `You are an expert email writer drafting a complete, ready-to-send email on behalf of ${userName || "the user"} from a short instruction.
+
+Write a well-structured, professional email:
+- Open with an appropriate greeting. Use the recipient's name if the instruction names them; otherwise use a neutral greeting such as "Hi there,".
+- Write 2-4 clear, well-organized paragraphs that fully develop the intent of the instruction. Use a short bulleted list when it improves readability.
+- Make the purpose and any request or next step explicit and easy to act on.
+- Keep a polished, professional, and warm tone. Be specific and substantive — avoid filler and one-line emails.
+- Close with a suitable sign-off on its own line, followed by "${userName || "[Your name]"}".
+- Do NOT invent specific facts, figures, dates, or commitments that aren't implied by the instruction; use light placeholders like [date] or [link] only when genuinely needed.
+${input.tone ? `\nDesired tone: ${input.tone}` : ""}
+${input.styleContext ? `\nWriting style / context to emulate: ${input.styleContext}` : ""}`;
 
       const { object } = await generateObject({
         model: google("gemini-2.5-flash"),
         schema: z.object({
-          subject: z.string().describe("A concise email subject line (no more than 10 words)"),
-          body: z.string().describe("The email body text, no subject line or signature"),
+          subject: z.string().describe("A concise, specific email subject line (no more than 10 words)"),
+          body: z
+            .string()
+            .describe(
+              "The complete email body: greeting, multiple well-structured paragraphs, and a professional sign-off with the sender's name",
+            ),
         }),
         system: systemPrompt,
-        prompt: input.prompt,
+        prompt: `Write the email for this instruction:\n\n${input.prompt}`,
       });
 
       return object;
@@ -144,6 +158,7 @@ Rules:
       const subject = dbMessage.data.subject ?? "No Subject";
       const from = dbMessage.data.from ?? "Unknown Sender";
       const body = dbMessage.data.body ?? dbMessage.data.snippet ?? "";
+      const userName = ctx.session.user.name ?? "";
 
       const { object } = await generateObject({
         model: google("gemini-2.5-flash"),
@@ -151,19 +166,38 @@ Rules:
           replies: z
             .array(
               z.object({
-                label: z.string().describe("Short 2-4 word label representing this option"),
-                body: z.string().describe("The draft reply email body"),
+                label: z
+                  .string()
+                  .describe(
+                    "Short 2-4 word label summarizing the stance of this reply (e.g. 'Accept & schedule', 'Ask for details')",
+                  ),
+                body: z
+                  .string()
+                  .describe(
+                    "A complete, professional, ready-to-send email reply (multiple short paragraphs), including greeting and sign-off",
+                  ),
               })
             )
             .length(3),
         }),
-        prompt: `Based on the email thread context, generate exactly 3 smart reply suggestions.
-Subject: ${subject}
-From: ${from}
-Email body:
-${body}
+        system: `You are an expert executive assistant who drafts polished, professional email replies on behalf of ${userName || "the user"}.
 
-Ensure that the reply drafts match the language and address the key points in the incoming email.`,
+Each reply MUST be a complete, ready-to-send email — never a one-line snippet. For every reply:
+- Open with an appropriate greeting using the sender's first name when it can be inferred.
+- Write 2-4 concise paragraphs (use a short bulleted list when it improves clarity) that directly address the key points, questions, and any action items in the incoming email.
+- Keep a professional, warm, and confident tone; be clear and courteous.
+- Close with a suitable sign-off on its own line, followed by "${userName || "[Your name]"}".
+- Match the language of the incoming email.
+- Do NOT include a subject line. Do NOT invent specific facts, figures, dates, or commitments that aren't supported by the email — keep unknowns general or use a light placeholder like [date] only when necessary.
+
+Return exactly 3 DISTINCT options that take different stances, for example: (1) a positive/affirmative reply that moves things forward, (2) a reply that asks clarifying questions or requests more detail, and (3) a polite deferral or an alternative proposal.`,
+        prompt: `Draft 3 reply options to the email below.
+
+From: ${from}
+Subject: ${subject}
+
+Email body:
+${body}`,
       });
 
       return object;

@@ -345,20 +345,23 @@ export function InboxList({
                 </div>
               </div>
             ))}
-
-            {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="py-3 flex items-center justify-center min-h-[2.5rem]">
-              {isFetching ? (
-                <div className="flex items-center gap-2 text-xs text-zinc-600">
-                  <Loader2 size={13} className="animate-spin" />
-                  Loading more...
-                </div>
-              ) : !canLoadMore ? (
-                <span className="text-[10px] text-zinc-700">All caught up</span>
-              ) : null}
-            </div>
           </>
         )}
+
+        {/* Infinite scroll sentinel — always mounted (outside the loading/empty
+            branches) so the IntersectionObserver can attach on first commit.
+            Status text only shows once a list is present. */}
+        <div ref={sentinelRef} className="py-3 flex items-center justify-center min-h-[2.5rem]">
+          {emails.length > 0 &&
+            (isFetching ? (
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <Loader2 size={13} className="animate-spin" />
+                Loading more...
+              </div>
+            ) : !canLoadMore ? (
+              <span className="text-[10px] text-zinc-700">All caught up</span>
+            ) : null)}
+        </div>
       </div>
     </section>
   );

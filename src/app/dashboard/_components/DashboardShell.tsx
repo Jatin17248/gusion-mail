@@ -5,18 +5,19 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import {
-  X,
-  HelpCircle,
-  Send,
-  Clock,
-  Loader2,
-} from "lucide-react";
+import { X, HelpCircle } from "lucide-react";
 import { useShortcuts } from "@/app/_hooks/use-shortcuts";
 import { CommandPalette } from "@/app/_components/command-palette";
 import { AgentDrawer } from "@/app/_components/agent-drawer";
 import { ShortcutTutorial } from "@/app/_components/shortcut-tutorial";
 import { Sidebar } from "@/app/_components/dashboard/sidebar";
+import {
+  ComposeModal,
+  DRAFT_KEY,
+  type ComposeInitial,
+  type ComposePayload,
+} from "@/app/_components/dashboard/compose-modal";
+import { UpgradeModal } from "@/app/_components/dashboard/upgrade-modal";
 import { DashboardContext } from "@/app/dashboard/_context/dashboard-context";
 
 interface DashboardShellProps {
@@ -28,18 +29,21 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const utils = api.useUtils();
   const router = useRouter();
 
-  // Compose state
+  // Compose state — the form itself lives inside <ComposeModal>; the shell only
+  // tracks open/prefill and orchestrates the send-with-undo window.
   const [composeOpen, setComposeOpen] = useState(false);
-  const [composeTo, setComposeTo] = useState("");
-  const [composeSubject, setComposeSubject] = useState("");
-  const [composeBody, setComposeBody] = useState("");
-  const [aiComposePrompt, setAiComposePrompt] = useState("");
-  const [showSendLaterDropdown, setShowSendLaterDropdown] = useState(false);
-  const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
+  const [composeInitial, setComposeInitial] = useState<ComposeInitial | undefined>(undefined);
+
+  // Upgrade / paywall modal
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
+  const openUpgrade = useCallback((reason?: string) => {
+    setUpgradeReason(reason);
+    setUpgradeOpen(true);
+  }, []);
 
   // Undo send state
   const [undoActive, setUndoActive] = useState(false);
-  const [, setUndoDraft] = useState<{ to: string; subject: string; body: string; sendAt?: Date } | null>(null);
   const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   // Shortcut help modal
@@ -150,10 +154,6 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const sendEmail = api.gmail.sendEmail.useMutation({
     onSuccess: () => {
       toast.success("Email sent!");
-      setComposeOpen(false);
-      setComposeTo("");
-      setComposeSubject("");
-      setComposeBody("");
       void utils.gmail.searchEmails.invalidate();
     },
     onError: (err) => toast.error(err.message || "Failed to send."),
@@ -162,31 +162,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const scheduleSend = api.gmail.scheduleSend.useMutation({
     onSuccess: () => {
       toast.success("Email scheduled successfully!");
-      setComposeOpen(false);
-      setComposeTo("");
-      setComposeSubject("");
-      setComposeBody("");
       void utils.gmail.searchEmails.invalidate();
     },
     onError: (err) => toast.error(err.message || "Failed to schedule send."),
   });
 
-  const generateAiDraft = api.ai.aiCompose.useMutation({
-    onSuccess: (res) => {
-      setComposeBody(res.body);
-      if (res.subject) setComposeSubject(res.subject);
-      setAiComposePrompt("");
-      toast.success("AI draft generated!");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Failed to generate draft.");
-    },
-  });
-
   const triggerSendEmail = useCallback(
-    (to: string, subject: string, body: string, sendAt?: Date) => {
+    (payload: ComposePayload, sendAt?: Date) => {
       setComposeOpen(false);
-      setUndoDraft({ to, subject, body, sendAt });
+      setComposeInitial(undefined);
       setUndoActive(true);
 
       const toastId = toast.info(
@@ -197,21 +181,18 @@ export function DashboardShell({ children }: DashboardShellProps) {
           duration: 5000,
           action: {
             label: "Undo",
-            onClick: () => {
-              handleUndoSend(to, subject, body);
-            },
+            onClick: () => handleUndoSend(payload),
           },
         }
       );
 
       const timeoutId = setTimeout(() => {
-        if (sendAt) {
-          scheduleSend.mutate({ to, subject, body, sendAt });
-        } else {
-          sendEmail.mutate({ to, subject, body });
-        }
+        if (sendAt) scheduleSend.mutate({ ...payload, sendAt });
+        else sendEmail.mutate(payload);
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
         setUndoActive(false);
-        setUndoDraft(null);
         setUndoTimeoutId(null);
         toast.dismiss(toastId);
       }, 5000);
@@ -223,12 +204,17 @@ export function DashboardShell({ children }: DashboardShellProps) {
   );
 
   const handleUndoSend = useCallback(
-    (to: string, subject: string, body: string) => {
+    (payload: ComposePayload) => {
       setUndoActive((active) => {
         if (!active) return false;
-        setComposeTo(to);
-        setComposeSubject(subject);
-        setComposeBody(body);
+        setComposeInitial({
+          to: payload.to,
+          cc: payload.cc,
+          bcc: payload.bcc,
+          subject: payload.subject,
+          body: payload.body,
+          attachments: payload.attachments?.map((a) => ({ ...a, size: 0 })),
+        });
         setComposeOpen(true);
         toast.success("Sending cancelled. Draft restored.");
         return false;
@@ -238,7 +224,6 @@ export function DashboardShell({ children }: DashboardShellProps) {
         clearTimeout(undoTimeoutId);
         setUndoTimeoutId(null);
       }
-      setUndoDraft(null);
     },
     [undoTimeoutId]
   );
@@ -304,7 +289,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   });
 
   return (
-    <DashboardContext.Provider value={{ setComposeOpen, agentOpen, setAgentOpen }}>
+    <DashboardContext.Provider value={{ setComposeOpen, agentOpen, setAgentOpen, openUpgrade }}>
       <div className="dashboard-root flex h-screen bg-zinc-950 text-zinc-50 overflow-hidden font-sans">
         <Sidebar
           agentOpen={agentOpen}
@@ -400,197 +385,25 @@ export function DashboardShell({ children }: DashboardShellProps) {
         )}
 
         {/* Compose Email Modal */}
-        {composeOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
-            <div className="w-full max-w-lg p-6 rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl relative space-y-4">
-              <button
-                onClick={() => setComposeOpen(false)}
-                className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-200"
-              >
-                <X size={18} />
-              </button>
-              <h3 className="text-md font-bold text-white">New Message</h3>
-              <div className="space-y-3 text-left">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-1">To</label>
-                  <input
-                    type="email"
-                    placeholder="recipient@example.com"
-                    value={composeTo}
-                    onChange={(e) => setComposeTo(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-1">Subject</label>
-                  <input
-                    type="text"
-                    placeholder="Subject"
-                    value={composeSubject}
-                    onChange={(e) => setComposeSubject(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
-                  />
-                </div>
-                <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-lg space-y-2">
-                  <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider">✨ Write with AI</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Write a friendly follow-up about the project budget..."
-                      value={aiComposePrompt}
-                      onChange={(e) => setAiComposePrompt(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-855 rounded-md text-xs text-zinc-200 placeholder:text-zinc-505 focus:outline-none focus:border-indigo-500 transition"
-                    />
-                    <button
-                      onClick={() => generateAiDraft.mutate({ prompt: aiComposePrompt })}
-                      disabled={!aiComposePrompt || generateAiDraft.isPending}
-                      className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1"
-                    >
-                      {generateAiDraft.isPending ? (
-                        <>
-                          <Loader2 size={12} className="animate-spin" />
-                          Drafting...
-                        </>
-                      ) : (
-                        "Draft"
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-500 mb-1">Message</label>
-                  <textarea
-                    placeholder="Write your email body..."
-                    value={composeBody}
-                    onChange={(e) => {
-                      let val = e.target.value;
-                      if (val.endsWith(" ")) {
-                        const regex = /\/([a-zA-Z0-9_-]+)\s$/;
-                        const match = regex.exec(val);
-                        if (match) {
-                          const shortcut = match[1];
-                          const template = templates?.find((t) => t.shortcut === shortcut);
-                          if (template) {
-                            val = val.replace(new RegExp(`/${shortcut}\\s$`), template.body + " ");
-                            if (template.subject && !composeSubject) {
-                              setComposeSubject(template.subject);
-                            }
-                          }
-                        }
-                      }
-                      setComposeBody(val);
-                    }}
-                    rows={8}
-                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition resize-none"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowTemplatesDropdown(!showTemplatesDropdown)}
-                    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-md transition cursor-pointer text-xs font-semibold"
-                  >
-                    Templates
-                  </button>
-                  {showTemplatesDropdown && (
-                    <div className="absolute left-0 bottom-full mb-2 w-64 max-h-60 overflow-y-auto p-2 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-1">
-                      <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Insert Template</div>
-                      {templates?.length === 0 && <div className="text-xs text-zinc-500 px-1 py-1">No templates found</div>}
-                      {templates?.map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => {
-                            if (t.subject) setComposeSubject(t.subject);
-                            setComposeBody((prev) => (prev ? prev + "\n\n" + t.body : t.body));
-                            setShowTemplatesDropdown(false);
-                          }}
-                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition cursor-pointer truncate"
-                        >
-                          {t.name} (/{t.shortcut})
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => setComposeOpen(false)}
-                    className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <div className="relative flex items-center">
-                    <button
-                      onClick={() => triggerSendEmail(composeTo, composeSubject, composeBody)}
-                      disabled={!composeTo || !composeSubject || !composeBody || sendEmail.isPending}
-                      className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-l-lg transition cursor-pointer flex items-center gap-1 disabled:opacity-50 border-r border-indigo-500/20"
-                    >
-                      <span>Send</span>
-                      <Send size={10} />
-                    </button>
-                    <button
-                      onClick={() => setShowSendLaterDropdown(!showSendLaterDropdown)}
-                      disabled={!composeTo || !composeSubject || !composeBody}
-                      className="px-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg transition cursor-pointer flex items-center justify-center disabled:opacity-50"
-                      title="Schedule Send"
-                    >
-                      <Clock size={12} />
-                    </button>
+        <ComposeModal
+          open={composeOpen}
+          initial={composeInitial}
+          sending={sendEmail.isPending || scheduleSend.isPending}
+          templates={templates}
+          onClose={() => {
+            setComposeOpen(false);
+            setComposeInitial(undefined);
+          }}
+          onSend={(payload) => triggerSendEmail(payload)}
+          onScheduleSend={(payload, sendAt) => triggerSendEmail(payload, sendAt)}
+        />
 
-                    {showSendLaterDropdown && (
-                      <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl border border-zinc-850 bg-zinc-950/95 backdrop-blur-md shadow-2xl z-50 text-left space-y-2">
-                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1">Schedule Send</div>
-                        <button
-                          onClick={() => {
-                            const d = new Date();
-                            d.setHours(d.getHours() + 1);
-                            triggerSendEmail(composeTo, composeSubject, composeBody, d);
-                            setShowSendLaterDropdown(false);
-                          }}
-                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
-                        >
-                          <span>In 1 hour</span>
-                          <span className="text-[10px] text-zinc-550">
-                            {new Date(Date.now() + 3600 * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            const d = new Date();
-                            d.setDate(d.getDate() + 1);
-                            d.setHours(8, 0, 0, 0);
-                            triggerSendEmail(composeTo, composeSubject, composeBody, d);
-                            setShowSendLaterDropdown(false);
-                          }}
-                          className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900/50 transition flex justify-between cursor-pointer"
-                        >
-                          <span>Tomorrow morning</span>
-                          <span className="text-[10px] text-zinc-550">8:00 AM</span>
-                        </button>
-                        <div className="border-t border-zinc-900 my-1" />
-                        <div className="px-1 space-y-1">
-                          <label className="block text-[9px] text-zinc-500 font-semibold">Custom date & time</label>
-                          <input
-                            type="datetime-local"
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                const d = new Date(e.target.value);
-                                triggerSendEmail(composeTo, composeSubject, composeBody, d);
-                                setShowSendLaterDropdown(false);
-                              }
-                            }}
-                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-850 rounded text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 transition"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Upgrade / paywall modal */}
+        <UpgradeModal
+          open={upgradeOpen}
+          reason={upgradeReason}
+          onClose={() => setUpgradeOpen(false)}
+        />
 
         {/* Command Palette */}
         <CommandPalette

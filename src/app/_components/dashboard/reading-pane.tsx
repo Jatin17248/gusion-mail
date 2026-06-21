@@ -12,6 +12,7 @@ import {
   File as FileIcon,
   Download,
   Loader2,
+  CalendarPlus,
 } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
 import { toast } from "sonner";
@@ -351,6 +352,26 @@ export function ReadingPane({
   const displayEmail = selectedMessage ?? previewEmail;
   const [showFollowUpDropdown, setShowFollowUpDropdown] = useState(false);
 
+  // One-click: turn this email into a tentative calendar event.
+  const createCalendarEvent = api.calendar.createDraft.useMutation({
+    onSuccess: () => toast.success("Added to your calendar as a tentative event."),
+    onError: (err) => toast.error(err.message || "Failed to create event."),
+  });
+
+  const handleCreateEventFromEmail = () => {
+    if (!displayEmail) return;
+    // Default to the next half-hour slot, 30 minutes long.
+    const start = new Date();
+    start.setMinutes(start.getMinutes() < 30 ? 30 : 60, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60 * 1000);
+    createCalendarEvent.mutate({
+      summary: displayEmail.subject ?? "Follow up",
+      description: `From email: ${formatSender(displayEmail.from)}\n\n${displayEmail.snippet ?? ""}`,
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+  };
+
   const followUpOptions = [
     { label: "1 day", days: 1 },
     { label: "2 days", days: 2 },
@@ -453,6 +474,19 @@ export function ReadingPane({
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={handleCreateEventFromEmail}
+                disabled={createCalendarEvent.isPending || !displayEmail}
+                className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition cursor-pointer disabled:opacity-50"
+                title="Create calendar event from this email"
+              >
+                {createCalendarEvent.isPending ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <CalendarPlus size={16} />
+                )}
+              </button>
 
               <button
                 onClick={() => archiveEmail.mutate({ id: displayEmail.id })}

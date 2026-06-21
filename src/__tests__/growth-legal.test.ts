@@ -306,9 +306,9 @@ describe("Growth & Compliance Routers", () => {
     });
 
     it("should retrieve emails filtered by tab", async () => {
-      // Inbox now paginates against the Gmail API (messages.list → cursor) and
-      // hydrates each id via messages.get(metadata). The "important" tab maps to
-      // a Gmail `is:important` query.
+      // Inbox paginates against the Gmail API (messages.list → cursor); each id is
+      // hydrated via messages.get (which auto-caches the entity) and read back from
+      // the entity cache. The "important" tab maps to a Gmail `is:important` query.
       const mockApiList = vi.fn().mockImplementation(({ q }: { q?: string }) =>
         Promise.resolve({
           messages: q?.includes("is:important")
@@ -317,19 +317,19 @@ describe("Growth & Compliance Routers", () => {
           nextPageToken: undefined,
         }),
       );
-      const mockApiGet = vi.fn().mockImplementation(({ id }: { id: string }) =>
-        Promise.resolve({
-          id,
-          threadId: "t1",
-          snippet: "snippet",
-          internalDate: new Date(1718361000000),
-          payload: {
-            headers: [
-              { name: "Subject", value: id === "msg_imp_1" ? "Imp Subject" : "All Subject" },
-              { name: "From", value: "sender@example.com" },
-            ],
-          },
-        }),
+      const mockApiGet = vi.fn().mockResolvedValue({});
+      const mockFindMany = vi.fn().mockImplementation((ids: string[]) =>
+        Promise.resolve(
+          ids.map((id) => ({
+            entity_id: id,
+            updated_at: new Date(),
+            data: {
+              subject: id === "msg_imp_1" ? "Imp Subject" : "All Subject",
+              from: "sender@example.com",
+              internalDate: "1718361000000",
+            },
+          })),
+        ),
       );
       vi.mocked(getTenant).mockReturnValue({
         gmail: {
@@ -337,6 +337,11 @@ describe("Growth & Compliance Routers", () => {
             messages: {
               list: mockApiList,
               get: mockApiGet,
+            },
+          },
+          db: {
+            messages: {
+              findManyByEntityIds: mockFindMany,
             },
           },
         },

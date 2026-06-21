@@ -12,11 +12,15 @@ import {
   LogOut,
   Sun,
   Moon,
+  Zap,
+  ShieldCheck,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { api } from "@/trpc/react";
+import { useDashboard } from "@/app/dashboard/_context/dashboard-context";
 
 interface SidebarProps {
   agentOpen: boolean;
@@ -31,6 +35,10 @@ export function Sidebar({
   trialDaysRemaining,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { openUpgrade } = useDashboard();
+  const { data: subscription } = api.billing.getSubscription.useQuery(undefined, {
+    staleTime: 60000,
+  });
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
 
@@ -145,15 +153,54 @@ export function Sidebar({
 
       {/* Footer info: Trial and Sign Out */}
       <div className="space-y-4">
-        <div className="p-3 rounded-lg border border-indigo-500/10 bg-indigo-500/5 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 mb-1">
-            <Clock size={12} />
-            <span>Trial Active</span>
-          </div>
-          <p className="text-[11px] text-zinc-400">
-            {trialDaysRemaining} days remaining in trial. Accessing all Pro features.
-          </p>
-        </div>
+        {(() => {
+          const isPro =
+            subscription?.plan === "pro" && subscription?.status === "active";
+          const daysLeft = subscription?.trialDaysRemaining ?? trialDaysRemaining;
+
+          if (isPro) {
+            return (
+              <div className="p-3 rounded-lg border border-emerald-500/15 bg-emerald-500/5 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                  <ShieldCheck size={12} />
+                  <span>Pro plan active</span>
+                </div>
+              </div>
+            );
+          }
+
+          const expired = daysLeft <= 0;
+          return (
+            <div
+              className={`p-3 rounded-lg border backdrop-blur-sm ${
+                expired
+                  ? "border-rose-500/20 bg-rose-500/5"
+                  : "border-indigo-500/10 bg-indigo-500/5"
+              }`}
+            >
+              <div
+                className={`flex items-center gap-2 text-xs font-semibold mb-1 ${
+                  expired ? "text-rose-400" : "text-indigo-400"
+                }`}
+              >
+                <Clock size={12} />
+                <span>{expired ? "Trial ended" : "Trial Active"}</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mb-2">
+                {expired
+                  ? "Upgrade to keep using AI features and automations."
+                  : `${daysLeft} day${daysLeft === 1 ? "" : "s"} remaining. Accessing all Pro features.`}
+              </p>
+              <button
+                onClick={() => openUpgrade()}
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer"
+              >
+                <Zap size={12} />
+                Upgrade to Pro
+              </button>
+            </div>
+          );
+        })()}
 
         <div className="flex items-center justify-between border-t border-zinc-900 pt-4 px-2">
           <div className="flex items-center gap-2 min-w-0">

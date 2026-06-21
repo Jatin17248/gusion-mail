@@ -5,6 +5,7 @@ interface DashboardContextValue {
   setComposeOpen: (open: boolean) => void;
   agentOpen: boolean;
   setAgentOpen: (open: boolean) => void;
+  openUpgrade: (reason?: string) => void;
 }
 
 export const DashboardContext = createContext<DashboardContextValue | null>(null);

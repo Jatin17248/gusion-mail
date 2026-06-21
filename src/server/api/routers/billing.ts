@@ -23,7 +23,9 @@ export const billingRouter = createTRPCRouter({
       }
 
       const txnid = `txn_${crypto.randomBytes(8).toString('hex')}`;
-      const amount = "20.00"; // Assuming $20/mo or equivalent in local currency
+      // Gusion Pro monthly price (INR, charged via PayU). Keep this in sync with
+      // the price shown in <UpgradeModal> / <SubscriptionManager>.
+      const amount = "999.00";
       const productinfo = "Gusion Mail Pro Subscription";
       const firstname = ctx.session.user.name?.split(' ')[0] ?? "User";
       const email = ctx.session.user.email ?? "";

@@ -15,6 +15,7 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   dedupeByEntityId,
   sortMessagesNewestFirst,
+  messageTimestamp,
 } from "@/server/lib/corsair-entities";
 import { redis } from "@/server/lib/redis";
 import { ratelimit } from "@/server/lib/ratelimit";
@@ -97,57 +98,61 @@ async function bumpInboxVersion(userId: string): Promise<void> {
   }
 }
 
-// Map a Gmail API messages.get response (format=metadata|full) to a list row.
-function mapApiMessage(msg: {
-  id?: string;
-  threadId?: string;
-  snippet?: string;
-  internalDate?: Date | string | number | null;
-  payload?: { headers?: { name?: string; value?: string }[] };
+// Map a cached Corsair message entity to a list row. The webhook/SDK pipeline
+// extracts subject/from/to to top-level fields; fall back to payload.headers.
+function mapMessage(message: {
+  entity_id: string;
+  data: {
+    threadId?: string;
+    snippet?: string;
+    subject?: string;
+    from?: string;
+    to?: string;
+    internalDate?: string | null;
+    createdAt?: Date | null;
+    payload?: { headers?: { name?: string; value?: string }[] };
+  };
 }): MappedMessage {
-  const headers = msg.payload?.headers;
-  const raw = msg.internalDate;
-  const ms =
-    raw instanceof Date ? raw.getTime() : raw != null ? Number(raw) : null;
-  const validMs = ms != null && !Number.isNaN(ms) ? ms : null;
+  const headers = message.data.payload?.headers;
+  const rawDate = message.data.internalDate ?? null;
   return {
-    id: msg.id ?? "",
-    threadId: msg.threadId ?? "",
-    snippet: msg.snippet ?? "",
-    subject: getHeader(headers, "Subject"),
-    from: getHeader(headers, "From"),
-    to: getHeader(headers, "To"),
-    date: validMs != null ? String(validMs) : null,
-    timestamp: validMs ?? 0,
+    id: message.entity_id,
+    threadId: message.data.threadId ?? "",
+    snippet: message.data.snippet ?? "",
+    subject: message.data.subject || getHeader(headers, "Subject"),
+    from: message.data.from || getHeader(headers, "From"),
+    to: message.data.to || getHeader(headers, "To"),
+    date: rawDate,
+    timestamp: messageTimestamp(rawDate ?? undefined, message.data.createdAt),
   };
 }
 
-// Hydrate Gmail message IDs into list rows via messages.get(metadata).
-// Chunked to bound concurrency and avoid 429s when a page/limit is large.
+// Hydrate Gmail message IDs into list rows. Each messages.get auto-caches the
+// entity (extracting subject/from/to from headers); we then read the populated
+// rows back from the entity cache. Chunked to bound concurrency / avoid 429s.
 async function hydrateMessages(
   tenant: ReturnType<typeof getTenant>,
   ids: string[],
 ): Promise<MappedMessage[]> {
+  if (ids.length === 0) return [];
+
   const CHUNK = 8;
-  const out: MappedMessage[] = [];
   for (let i = 0; i < ids.length; i += CHUNK) {
-    const rows = await Promise.all(
-      ids.slice(i, i + CHUNK).map(async (id) => {
-        try {
-          const msg = await tenant.gmail.api.messages.get({
-            id,
-            format: "metadata",
-            metadataHeaders: ["From", "To", "Subject", "Date"],
-          });
-          return mapApiMessage(msg);
-        } catch {
-          return null;
-        }
-      }),
+    await Promise.all(
+      ids.slice(i, i + CHUNK).map((id) =>
+        tenant.gmail.api.messages
+          .get({ id, format: "full" })
+          .catch(() => null),
+      ),
     );
-    for (const r of rows) if (r?.id) out.push(r);
   }
-  return out;
+
+  const cached = await tenant.gmail.db.messages.findManyByEntityIds(ids);
+  return sortMessagesNewestFirst(
+    dedupeByEntityId(cached)
+      .map(mapMessage)
+      .filter((m) => !!(m.from || m.subject || m.snippet)),
+  );
 }
 
 // Build a Gmail search query for a tab + optional user search string.
