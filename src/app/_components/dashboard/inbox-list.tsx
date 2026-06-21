@@ -74,6 +74,26 @@ export function InboxList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Hover-intent prefetch: only prefetch a message after the cursor dwells on a
+  // row for ~200ms. Without this, fast scroll-throughs fire a getMessage (Gmail
+  // API) call per row the cursor crosses, bursting into 429 rate limits.
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRowEnter = (id: string) => {
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = setTimeout(() => {
+      void utils.gmail.getMessage.prefetch({ id });
+    }, 200);
+  };
+  const handleRowLeave = () => {
+    if (prefetchTimer.current) {
+      clearTimeout(prefetchTimer.current);
+      prefetchTimer.current = null;
+    }
+  };
+  useEffect(() => () => {
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+  }, []);
+
   const createSavedSearch = api.search.createSavedSearch.useMutation({
     onSuccess: () => {
       toast.success("Search saved!");
@@ -82,7 +102,23 @@ export function InboxList({
     onError: () => toast.error("Failed to save search"),
   });
 
-  // Infinite scroll: observe sentinel relative to the scroll container (not the viewport)
+  // Infinite scroll via IntersectionObserver.
+  // The observer is created once on mount (stable ref pattern) to avoid the
+  // "already intersecting on recreate" race. However IntersectionObserver only
+  // fires on intersection *change*, so if the sentinel is already in the viewport
+  // when `canLoadMore` flips to true (e.g. short list that doesn't fill the pane),
+  // no change event fires and the next page never loads. We fix this by storing
+  // the observer in a ref and doing a quick unobserve/re-observe whenever
+  // `canLoadMore` becomes true — that forces an immediate callback with the
+  // current intersection state.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const onLoadMoreRef = useRef(onLoadMore);
+  const canLoadMoreRef = useRef(canLoadMore);
+  const isFetchingRef = useRef(isFetching);
+  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+  useEffect(() => { canLoadMoreRef.current = canLoadMore; }, [canLoadMore]);
+  useEffect(() => { isFetchingRef.current = isFetching; }, [isFetching]);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const root = scrollContainerRef.current;
@@ -90,16 +126,32 @@ export function InboxList({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting && !isFetching && canLoadMore) {
-          onLoadMore();
+        if (entry?.isIntersecting && !isFetchingRef.current && canLoadMoreRef.current) {
+          onLoadMoreRef.current();
         }
       },
-      { root, rootMargin: "150px" }
+      { root, rootMargin: "200px", threshold: 0 }
     );
 
     observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [isFetching, canLoadMore, onLoadMore]);
+    observerRef.current = observer;
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
+
+  // Re-observe sentinel whenever canLoadMore becomes true and fetching stops.
+  // This triggers an immediate intersection check so the sentinel doesn't have
+  // to leave and re-enter the viewport to fire the next load.
+  useEffect(() => {
+    if (!canLoadMore || isFetching) return;
+    const observer = observerRef.current;
+    const sentinel = sentinelRef.current;
+    if (!observer || !sentinel) return;
+    observer.unobserve(sentinel);
+    observer.observe(sentinel);
+  }, [canLoadMore, isFetching]);
 
   return (
     <section className="w-105 shrink-0 border-r border-zinc-900 flex flex-col bg-zinc-900/5">
@@ -238,6 +290,8 @@ export function InboxList({
             {emails.map((email, idx) => (
               <div
                 key={email.id}
+                onMouseEnter={() => handleRowEnter(email.id)}
+                onMouseLeave={handleRowLeave}
                 onClick={() => {
                   setFocusedIndex(idx);
                   setActiveMessageId(email.id);
@@ -293,13 +347,15 @@ export function InboxList({
             ))}
 
             {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="py-4 flex items-center justify-center">
-              {isFetching && (
+            <div ref={sentinelRef} className="py-3 flex items-center justify-center min-h-[2.5rem]">
+              {isFetching ? (
                 <div className="flex items-center gap-2 text-xs text-zinc-600">
                   <Loader2 size={13} className="animate-spin" />
                   Loading more...
                 </div>
-              )}
+              ) : !canLoadMore ? (
+                <span className="text-[10px] text-zinc-700">All caught up</span>
+              ) : null}
             </div>
           </>
         )}

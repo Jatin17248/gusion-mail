@@ -1,4 +1,5 @@
 // @ts-nocheck
+const http = require('http');
 const WebSocket = require('ws');
 const Redis = require('ioredis');
 require('dotenv').config();
@@ -6,8 +7,22 @@ require('dotenv').config();
 const port = process.env.PORT || 8080;
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-const wss = new WebSocket.Server({ port });
-console.log(`WebSocket server running on port ${port}`);
+// HTTP server handles health checks; WebSocket server upgrades from it
+const httpServer = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ok');
+    return;
+  }
+  res.writeHead(404);
+  res.end('Not found');
+});
+
+const wss = new WebSocket.Server({ server: httpServer });
+
+httpServer.listen(port, () => {
+  console.log(`WebSocket server running on port ${port}`);
+});
 
 const redisSubscriber = new Redis(redisUrl);
 

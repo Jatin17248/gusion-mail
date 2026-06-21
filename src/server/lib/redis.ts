@@ -5,6 +5,7 @@ interface CacheStore {
   get: (key: string) => Promise<unknown>;
   set: (key: string, value: unknown, options?: { ex: number }) => Promise<unknown>;
   del: (key: string) => Promise<unknown>;
+  incr: (key: string) => Promise<number>;
 }
 
 let redis: CacheStore;
@@ -35,6 +36,13 @@ if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
     async del(key: string) {
       store.delete(key);
       return 1;
+    },
+    async incr(key: string) {
+      const entry = store.get(key);
+      const cur = Number(entry?.val ?? 0) || 0;
+      const next = cur + 1;
+      store.set(key, { val: next });
+      return next;
     },
   };
 }

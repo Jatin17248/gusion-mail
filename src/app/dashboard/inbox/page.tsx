@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/trpc/react";
@@ -26,7 +26,6 @@ export default function InboxPage() {
 
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
-  const [limit, setLimit] = useState(PAGE_SIZE);
   const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
@@ -43,11 +42,6 @@ export default function InboxPage() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Reset limit when search or tab changes
-  useEffect(() => {
-    setLimit(PAGE_SIZE);
-  }, [debouncedSearch, inboxTab]);
-
   const toggleEmailSelection = (id: string) => {
     setSelectedEmailIds((prev) => {
       const newSet = new Set(prev);
@@ -59,15 +53,38 @@ export default function InboxPage() {
 
   const clearSelection = () => setSelectedEmailIds(new Set());
 
-  // Single source-of-truth for email list — shared with InboxList via props
-  const { data: emails = [], isLoading: emailsLoading, isFetching } = api.gmail.searchEmails.useQuery(
-    { query: debouncedSearch, limit, tab: inboxTab },
-    { retry: false, staleTime: 30000 }
-  );
+  // Cursor-based infinite pagination against Gmail. The query input omits
+  // `cursor` — tRPC injects it from getNextPageParam for each page.
+  const queryInput = { query: debouncedSearch, limit: PAGE_SIZE, tab: inboxTab };
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: emailsLoading,
+    isFetching,
+  } = api.gmail.searchEmails.useInfiniteQuery(queryInput, {
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const emails = data?.pages.flatMap((p) => p.items) ?? [];
+  const hasMore = !!hasNextPage;
+
+  const onLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Re-fetch from page 1 (called after mutations that change inbox membership).
+  const resetAndRefresh = useCallback(() => {
+    void utils.gmail.searchEmails.invalidate();
+  }, [utils.gmail.searchEmails]);
 
   const { data: selectedMessage, isLoading: messageLoading } = api.gmail.getMessage.useQuery(
     { id: activeMessageId ?? "" },
-    { enabled: !!activeMessageId }
+    { enabled: !!activeMessageId, retry: false }
   );
 
   const { data: dailyBriefData } = api.ai.aiDailyBrief.useQuery(undefined, {
@@ -78,7 +95,7 @@ export default function InboxPage() {
   const refreshInbox = api.gmail.refreshInbox.useMutation({
     onSuccess: (res) => {
       if (res.synced > 0) toast.success(`Synced ${res.synced} emails.`);
-      void utils.gmail.searchEmails.invalidate();
+      resetAndRefresh();
     },
     onError: (err) => {
       if (err.data?.code === "UNAUTHORIZED") {
@@ -91,7 +108,7 @@ export default function InboxPage() {
 
   const markRead = api.gmail.markRead.useMutation({
     onSuccess: () => {
-      void utils.gmail.searchEmails.invalidate();
+      // Only invalidate the message detail; don't reset the inbox list for read-state changes
       if (activeMessageId) {
         void utils.gmail.getMessage.invalidate({ id: activeMessageId });
       }
@@ -99,7 +116,7 @@ export default function InboxPage() {
   });
 
   const archiveEmail = api.gmail.archiveEmail.useMutation({
-    onMutate: async ({ id }) => {
+    onMutate: ({ id }) => {
       toast.info("Archived message", {
         action: {
           label: "Undo",
@@ -109,9 +126,21 @@ export default function InboxPage() {
       if (activeMessageId === id) {
         setActiveMessageId(null);
       }
+      // Optimistically remove from every cached page immediately.
+      utils.gmail.searchEmails.setInfiniteData(queryInput, (old) =>
+        old
+          ? {
+              ...old,
+              pages: old.pages.map((p) => ({
+                ...p,
+                items: p.items.filter((e) => e.id !== id),
+              })),
+            }
+          : old,
+      );
     },
     onSuccess: () => {
-      void utils.gmail.searchEmails.invalidate();
+      resetAndRefresh();
     },
   });
 
@@ -119,7 +148,7 @@ export default function InboxPage() {
     onSuccess: () => {
       toast.success("Email snoozed!");
       setActiveMessageId(null);
-      void utils.gmail.searchEmails.invalidate();
+      resetAndRefresh();
     },
     onError: (err) => toast.error(err.message || "Failed to snooze email."),
   });
@@ -128,7 +157,6 @@ export default function InboxPage() {
     onSuccess: () => {
       toast.success("Reply sent!");
       setReplyBody("");
-      void utils.gmail.searchEmails.invalidate();
       if (activeMessageId) {
         void utils.gmail.getMessage.invalidate({ id: activeMessageId });
       }
@@ -183,10 +211,10 @@ export default function InboxPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMessageId]);
 
-  // Reset focused index when emails change
+  // Reset focused index when the visible list changes (tab/search switch)
   useEffect(() => {
     setFocusedIndex(0);
-  }, [emails]);
+  }, [debouncedSearch, inboxTab]);
 
   // Keyboard shortcuts — operate on the same emails array that InboxList renders
   useShortcuts({
@@ -236,8 +264,8 @@ export default function InboxPage() {
         emails={emails}
         isLoading={emailsLoading}
         isFetching={isFetching}
-        canLoadMore={emails.length >= limit}
-        onLoadMore={() => setLimit((prev) => prev + PAGE_SIZE)}
+        canLoadMore={hasMore}
+        onLoadMore={onLoadMore}
         refreshInbox={refreshInbox}
         setComposeOpen={setComposeOpen}
         searchQuery={searchQuery}
@@ -261,6 +289,7 @@ export default function InboxPage() {
           <ReadingPane
             messageLoading={messageLoading}
             selectedMessage={selectedMessage}
+            previewEmail={emails.find((e) => e.id === activeMessageId)}
             dailyBriefData={dailyBriefData}
             createFollowUp={createFollowUp}
             archiveEmail={archiveEmail}

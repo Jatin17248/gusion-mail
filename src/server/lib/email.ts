@@ -1,25 +1,86 @@
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string;
+  /** base64-encoded file contents */
+  data: string;
+}
+
+function toBase64Url(message: string): string {
+  return Buffer.from(message, "utf-8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/** Wrap a base64 string into 76-char lines per RFC 2045. */
+function wrapBase64(data: string): string {
+  return data.replace(/[\r\n]/g, "").replace(/.{76}/g, "$&\r\n");
+}
+
 export function encodeRawEmail(opts: {
   to: string;
   subject: string;
   body: string;
   from?: string;
+  cc?: string;
+  bcc?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: OutgoingAttachment[];
 }): string {
-  const lines = [
+  const headers = [
     ...(opts.from ? [`From: ${opts.from}`] : []),
     `To: ${opts.to}`,
+    ...(opts.cc?.trim() ? [`Cc: ${opts.cc}`] : []),
+    ...(opts.bcc?.trim() ? [`Bcc: ${opts.bcc}`] : []),
     `Subject: ${opts.subject}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
-    "Content-Type: text/plain; charset=utf-8",
     "MIME-Version: 1.0",
+  ];
+
+  const attachments = opts.attachments ?? [];
+
+  // Simple text email when there are no attachments.
+  if (attachments.length === 0) {
+    const message = [
+      ...headers,
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      opts.body,
+    ].join("\r\n");
+    return toBase64Url(message);
+  }
+
+  // multipart/mixed: text body + each attachment as a base64 part.
+  const boundary = `gusion_${Date.now().toString(36)}_${Math.random()
+    .toString(36)
+    .slice(2)}`;
+
+  const parts: string[] = [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=utf-8",
     "",
     opts.body,
   ];
-  const message = lines.join("\r\n");
-  const base64 = Buffer.from(message, "utf-8").toString("base64");
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  for (const att of attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${att.mimeType}; name="${att.filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${att.filename}"`,
+      "",
+      wrapBase64(att.data),
+    );
+  }
+  parts.push(`--${boundary}--`);
+
+  return toBase64Url(parts.join("\r\n"));
 }
 
 export function decodeBase64Url(data: string): string {
@@ -151,8 +212,11 @@ export function buildEmailPreview(opts: {
 }
 
 type GmailPart = {
+  partId?: string;
   mimeType?: string;
-  body?: { data?: string };
+  filename?: string;
+  headers?: { name?: string; value?: string }[];
+  body?: { data?: string; attachmentId?: string; size?: number };
   parts?: GmailPart[];
 };
 
@@ -181,6 +245,53 @@ export function extractBodyFromPayload(payload?: GmailPart): string {
   }
 
   return "";
+}
+
+export interface EmailAttachment {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+/** Inline images (logos, signatures referenced by cid:) shouldn't show up as
+ * downloadable attachments — Gmail hides them too. */
+function isInlineImage(part: GmailPart): boolean {
+  if (!part.mimeType?.startsWith("image/")) return false;
+  const disposition =
+    part.headers
+      ?.find((h) => h.name?.toLowerCase() === "content-disposition")
+      ?.value?.toLowerCase() ?? "";
+  const hasContentId = part.headers?.some(
+    (h) => h.name?.toLowerCase() === "content-id",
+  );
+  return disposition.includes("inline") || !!hasContentId;
+}
+
+/** Walk the MIME tree and collect real (non-inline) attachments with the
+ * metadata needed to render a chip and lazily download the bytes. */
+export function extractAttachmentsFromPayload(
+  payload?: GmailPart,
+): EmailAttachment[] {
+  if (!payload) return [];
+  const attachments: EmailAttachment[] = [];
+
+  const walk = (part: GmailPart) => {
+    const filename = part.filename?.trim();
+    const attachmentId = part.body?.attachmentId;
+    if (filename && attachmentId && !isInlineImage(part)) {
+      attachments.push({
+        attachmentId,
+        filename,
+        mimeType: part.mimeType ?? "application/octet-stream",
+        size: part.body?.size ?? 0,
+      });
+    }
+    for (const sub of part.parts ?? []) walk(sub);
+  };
+
+  walk(payload);
+  return attachments;
 }
 
 export function getHeader(

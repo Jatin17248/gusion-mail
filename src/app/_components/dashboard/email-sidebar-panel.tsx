@@ -25,14 +25,14 @@ export function EmailSidePanel({
   const listRef = useRef<HTMLDivElement>(null);
 
   const {
-    data: emails = [],
+    data,
     isLoading,
     isFetching,
-    refetch,
   } = api.gmail.searchEmails.useQuery(
     { query: "", limit, tab: "all" },
     { retry: false, staleTime: 30000 }
   );
+  const emails = data?.items ?? [];
 
   const refreshInbox = api.gmail.refreshInbox.useMutation({
     onSuccess: () => {
@@ -48,9 +48,8 @@ export function EmailSidePanel({
     }
   }, [activeMessageId]);
 
-  // Track whether last full-page fetch returned a complete page.
-  // If emails.length < limit, there's nothing more to load.
-  const hasMore = emails.length > 0 && emails.length >= limit;
+  // More pages exist whenever Gmail returned a cursor for the next page.
+  const hasMore = !!data?.nextCursor;
 
   if (gmailAuthError) {
     return (

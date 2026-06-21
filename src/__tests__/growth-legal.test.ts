@@ -306,40 +306,60 @@ describe("Growth & Compliance Routers", () => {
     });
 
     it("should retrieve emails filtered by tab", async () => {
-      const mockList = vi.fn().mockResolvedValue([
-        { entity_id: "msg_all_1", data: { subject: "All Subject", internalDate: "1718361000" } }
-      ]);
-      const mockFindMany = vi.fn().mockResolvedValue([
-        { entity_id: "msg_imp_1", data: { subject: "Imp Subject", internalDate: "1718362000" } }
-      ]);
+      // Inbox now paginates against the Gmail API (messages.list → cursor) and
+      // hydrates each id via messages.get(metadata). The "important" tab maps to
+      // a Gmail `is:important` query.
+      const mockApiList = vi.fn().mockImplementation(({ q }: { q?: string }) =>
+        Promise.resolve({
+          messages: q?.includes("is:important")
+            ? [{ id: "msg_imp_1" }]
+            : [{ id: "msg_all_1" }],
+          nextPageToken: undefined,
+        }),
+      );
+      const mockApiGet = vi.fn().mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve({
+          id,
+          threadId: "t1",
+          snippet: "snippet",
+          internalDate: new Date(1718361000000),
+          payload: {
+            headers: [
+              { name: "Subject", value: id === "msg_imp_1" ? "Imp Subject" : "All Subject" },
+              { name: "From", value: "sender@example.com" },
+            ],
+          },
+        }),
+      );
       vi.mocked(getTenant).mockReturnValue({
         gmail: {
-          db: {
+          api: {
             messages: {
-              list: mockList,
-              findManyByEntityIds: mockFindMany,
+              list: mockApiList,
+              get: mockApiGet,
             },
           },
         },
       } as any);
 
-      // Mock database calls
+      // emailMeta join supplies the priority badge for msg_imp_1.
       vi.mocked(db.query.emailMeta.findMany).mockResolvedValue([
         { gmailMessageId: "msg_imp_1", priority: "high", category: "important" }
       ] as any);
 
       const caller = appRouter.createCaller(mockCtx as any);
-      
+
       // Test tab: all
       const resAll = await caller.gmail.searchEmails({ query: "", tab: "all" });
-      expect(resAll).toHaveLength(1);
-      expect(resAll[0]?.subject).toBe("All Subject");
+      expect(resAll.items).toHaveLength(1);
+      expect(resAll.items[0]?.subject).toBe("All Subject");
+      expect(resAll.nextCursor).toBeNull();
 
       // Test tab: important
       const resImp = await caller.gmail.searchEmails({ query: "", tab: "important" });
-      expect(resImp).toHaveLength(1);
-      expect(resImp[0]?.subject).toBe("Imp Subject");
-      expect(resImp[0]?.priority).toBe("high");
+      expect(resImp.items).toHaveLength(1);
+      expect(resImp.items[0]?.subject).toBe("Imp Subject");
+      expect(resImp.items[0]?.priority).toBe("high");
     });
   });
 });

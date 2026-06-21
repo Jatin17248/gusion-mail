@@ -97,6 +97,34 @@ ${input.styleContext ? `Writing Style / Context: ${input.styleContext}` : ""}`;
       return object;
     }),
 
+  // Smart Compose: suggest a short continuation of the email being written.
+  aiAutocomplete: protectedProcedure
+    .input(
+      z.object({
+        body: z.string(),
+        subject: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await verifyPremium(ctx.session.user.id);
+      if (input.body.trim().length < 3) return { completion: "" };
+
+      const { text } = await generateText({
+        model: google("gemini-2.5-flash"),
+        system: `You are an email autocomplete engine, like Gmail Smart Compose.
+Continue the user's email naturally from exactly where it ends.
+Rules:
+- Return ONLY the continuation text that should follow — never repeat what's already written.
+- Keep it short: at most one sentence (~15 words).
+- Match the existing tone, language, and formatting.
+- Do not add greetings, sign-offs, or signatures.
+- If the email already reads as complete, return an empty string.`,
+        prompt: `Subject: ${input.subject ?? ""}\n\nEmail so far:\n${input.body}\n\nContinuation:`,
+      });
+
+      return { completion: text.trim() };
+    }),
+
   aiSmartReply: protectedProcedure
     .input(z.object({ messageId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
