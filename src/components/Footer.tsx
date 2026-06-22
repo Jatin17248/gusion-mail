@@ -9,7 +9,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
   return (
     <>
       <footer className={cn("border-t-[3px] border-[#fff2e0] py-4 relative overflow-hidden bg-[#fff2e0]", className)}>
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#e61f2a] via-indigo-50 to-[#e61f2a]" />
+        <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-[#e61f2a] via-indigo-50 to-[#e61f2a]" />
         
         <section className="relative px-4 max-w-[1280px] mx-auto text-gray-500 grid md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_27%] gap-10 py-10 text-sm">
 
@@ -190,7 +190,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
             />
           </div>
 
-          <div className="bg-gradient-to-b from-transparent via-white to-white h-[20%] w-full absolute bottom-0 left-0 z-20"></div>
+          <div className="bg-linear-to-b from-transparent via-white to-white h-[20%] w-full absolute bottom-0 left-0 z-20"></div>
         </section>
 
       </footer>

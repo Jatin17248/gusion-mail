@@ -423,7 +423,7 @@ export function CommandCenter({ onNavigate }: CommandCenterProps) {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {!hasMessages && (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-5 pb-10">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center">
                 <Sparkles size={28} className="text-indigo-400" />
               </div>
               <div>

@@ -98,61 +98,139 @@ async function bumpInboxVersion(userId: string): Promise<void> {
   }
 }
 
-// Map a cached Corsair message entity to a list row. The webhook/SDK pipeline
-// extracts subject/from/to to top-level fields; fall back to payload.headers.
-function mapMessage(message: {
-  entity_id: string;
-  data: {
-    threadId?: string;
-    snippet?: string;
-    subject?: string;
-    from?: string;
-    to?: string;
-    internalDate?: string | null;
-    createdAt?: Date | null;
-    payload?: { headers?: { name?: string; value?: string }[] };
-  };
-}): MappedMessage {
-  const headers = message.data.payload?.headers;
-  const rawDate = message.data.internalDate ?? null;
-  return {
-    id: message.entity_id,
-    threadId: message.data.threadId ?? "",
-    snippet: message.data.snippet ?? "",
-    subject: message.data.subject || getHeader(headers, "Subject"),
-    from: message.data.from || getHeader(headers, "From"),
-    to: message.data.to || getHeader(headers, "To"),
-    date: rawDate,
-    timestamp: messageTimestamp(rawDate ?? undefined, message.data.createdAt),
-  };
+// GmailAPIError exposes `code`; HTTP errors expose `status`.
+function gmailErrorStatus(error: unknown): number | null {
+  if (error && typeof error === "object") {
+    const e = error as { status?: number; code?: number };
+    return e.status ?? e.code ?? null;
+  }
+  return null;
 }
 
-// Hydrate Gmail message IDs into list rows. Each messages.get auto-caches the
-// entity (extracting subject/from/to from headers); we then read the populated
-// rows back from the entity cache. Chunked to bound concurrency / avoid 429s.
-async function hydrateMessages(
-  tenant: ReturnType<typeof getTenant>,
-  ids: string[],
-): Promise<MappedMessage[]> {
-  if (ids.length === 0) return [];
+function isGmailAuthError(error: unknown): boolean {
+  const status = gmailErrorStatus(error);
+  return status === 401 || status === 403;
+}
 
-  const CHUNK = 8;
+function isGmailRateLimit(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    gmailErrorStatus(error) === 429 ||
+    /rate.?limit|quota|userRateLimitExceeded|too many requests/i.test(msg)
+  );
+}
+
+// Map a raw Gmail/SDK error to a typed TRPCError so the client can react
+// (silently retry transient rate limits, prompt a reconnect on auth failures)
+// instead of being handed an opaque empty inbox.
+function toInboxError(error: unknown): TRPCError {
+  if (isGmailAuthError(error)) {
+    return new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Google account connection is invalid. Please reconnect.",
+    });
+  }
+  if (isGmailRateLimit(error)) {
+    return new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Gmail is rate limiting requests. Please retry shortly.",
+    });
+  }
+  return new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Couldn't load your inbox. Please retry.",
+  });
+}
+
+
+type GmailClient = ReturnType<typeof google.gmail>;
+
+// Build an authenticated Gmail client directly from the NextAuth accounts row.
+// The googleapis OAuth2 client auto-refreshes the access token when it expires,
+// so this is always reliable — unlike the Corsair SDK which has its own credential
+// store that goes stale between JWT refreshes and JWT-level token updates.
+async function buildGmailClient(userId: string): Promise<GmailClient | null> {
+  const account = await db.query.accounts.findFirst({
+    where: and(eq(accounts.userId, userId), eq(accounts.provider, "google")),
+  });
+  if (!account?.access_token) return null;
+  const oauth2Client = new google.auth.OAuth2(
+    env.AUTH_GOOGLE_ID,
+    env.AUTH_GOOGLE_SECRET,
+  );
+  oauth2Client.setCredentials({
+    access_token: account.access_token,
+    refresh_token: account.refresh_token ?? undefined,
+    expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
+  });
+  return google.gmail({ version: "v1", auth: oauth2Client });
+}
+
+// Fetch Gmail metadata for a list of message IDs with per-message Redis caching.
+// Uses the googleapis client directly (not the Corsair SDK) because the Corsair
+// credential store goes stale and causes silent 30-second timeouts on every call.
+// The googleapis OAuth2 client auto-refreshes the token, so calls are reliable.
+async function fetchEmailMetadata(
+  gmailClient: GmailClient,
+  userId: string,
+  ids: string[],
+): Promise<{ rows: MappedMessage[]; failed: number }> {
+  if (ids.length === 0) return { rows: [], failed: 0 };
+
+  const CHUNK = 10;
+  const results: (MappedMessage | null)[] = [];
+
   for (let i = 0; i < ids.length; i += CHUNK) {
-    await Promise.all(
-      ids.slice(i, i + CHUNK).map((id) =>
-        tenant.gmail.api.messages
-          .get({ id, format: "full" })
-          .catch(() => null),
-      ),
+    const batch = ids.slice(i, i + CHUNK);
+    const batchResults = await Promise.all(
+      batch.map(async (id): Promise<MappedMessage | null> => {
+        const msgMetaKey = `gmail:msgmeta:v2:${userId}:${id}`;
+        const cachedMsg = (await redis.get(msgMetaKey)) as MappedMessage | null;
+        if (cachedMsg) return cachedMsg;
+        try {
+          const res = await gmailClient.users.messages.get({
+            userId: "me",
+            id,
+            format: "metadata",
+          });
+          const msg = res.data;
+          const headers = (msg.payload?.headers ?? []) as {
+            name?: string;
+            value?: string;
+          }[];
+          const rawDate =
+            msg.internalDate != null ? String(msg.internalDate) : null;
+          const mapped: MappedMessage = {
+            id: msg.id ?? id,
+            threadId: msg.threadId ?? "",
+            snippet: msg.snippet ?? "",
+            subject: getHeader(headers, "Subject"),
+            from: getHeader(headers, "From"),
+            to: getHeader(headers, "To"),
+            date: rawDate,
+            timestamp: messageTimestamp(rawDate ?? undefined),
+          };
+          if (mapped.from || mapped.subject || mapped.snippet) {
+            await redis.set(msgMetaKey, mapped, { ex: 300 });
+          }
+          return mapped;
+        } catch {
+          return null;
+        }
+      }),
     );
+    results.push(...batchResults);
   }
 
-  const cached = await tenant.gmail.db.messages.findManyByEntityIds(ids);
-  return sortMessagesNewestFirst(
-    dedupeByEntityId(cached)
-      .map(mapMessage)
-      .filter((m) => !!(m.from || m.subject || m.snippet)),
-  );
+  const failed = results.filter((r) => r === null).length;
+  return {
+    rows: sortMessagesNewestFirst(
+      results.filter(
+        (r): r is MappedMessage => r !== null && !!(r.from || r.subject || r.snippet),
+      ),
+    ),
+    failed,
+  };
 }
 
 // Build a Gmail search query for a tab + optional user search string.
@@ -194,16 +272,17 @@ export const gmailRouter = createTRPCRouter({
       const cached = (await redis.get(cacheKey)) as typeof emptyPage | null;
       if (cached) return cached;
 
-      let tenant;
-      try {
-        tenant = getTenant(ctx.session.user.corsairTenantId);
-      } catch {
-        // No Corsair tenant yet — return empty inbox rather than throwing
+      // Use googleapis directly so the OAuth2 client handles token refresh
+      // automatically. The Corsair SDK credential store goes stale and causes
+      // 30-second timeouts on every messages.get() call.
+      const gmailClient = await buildGmailClient(userId);
+      if (!gmailClient) {
         return emptyPage;
       }
 
       let rows: MappedMessage[] = [];
       let nextCursor: string | null = null;
+      let fetchFailed = 0;
 
       try {
         if (input.tab === "vip") {
@@ -216,28 +295,31 @@ export const gmailRouter = createTRPCRouter({
             ),
             limit: input.limit,
           });
-          rows = sortMessagesNewestFirst(
-            await hydrateMessages(
-              tenant,
-              vipMetas.map((m) => m.gmailMessageId),
-            ),
+          const fetched = await fetchEmailMetadata(
+            gmailClient,
+            userId,
+            vipMetas.map((m) => m.gmailMessageId),
           );
+          rows = fetched.rows;
+          fetchFailed = fetched.failed;
         } else {
-          // Cursor-paginate against Gmail so the whole mailbox is reachable.
-          const listResult = await tenant.gmail.api.messages.list({
+          const listRes = await gmailClient.users.messages.list({
+            userId: "me",
             maxResults: input.limit,
             q: buildInboxQuery(input.tab, input.query),
             pageToken: input.cursor,
           });
-          const ids = (listResult.messages ?? [])
+          const ids = (listRes.data.messages ?? [])
             .map((m) => m.id)
             .filter((id): id is string => !!id);
-          rows = sortMessagesNewestFirst(await hydrateMessages(tenant, ids));
-          nextCursor = listResult.nextPageToken ?? null;
+          const fetched = await fetchEmailMetadata(gmailClient, userId, ids);
+          rows = fetched.rows;
+          fetchFailed = fetched.failed;
+          nextCursor = listRes.data.nextPageToken ?? null;
         }
       } catch (err) {
-        console.error("[searchEmails] Gmail list error:", err);
-        return emptyPage;
+        console.error("[searchEmails] Gmail error:", err);
+        throw toInboxError(err);
       }
 
       // Join emailMeta for priority/category badges + snooze/VIP flags.
@@ -269,7 +351,11 @@ export const gmailRouter = createTRPCRouter({
         });
 
       const page = { items, nextCursor };
-      await redis.set(cacheKey, page, { ex: 60 });
+      // Skip caching if any individual message fetches failed (rate-limit or
+      // transient error) so a degraded result doesn't pin the inbox for 60s.
+      if (fetchFailed === 0) {
+        await redis.set(cacheKey, page, { ex: 60 });
+      }
       return page;
     }),
 
@@ -423,105 +509,71 @@ export const gmailRouter = createTRPCRouter({
     }),
 
   refreshInbox: protectedProcedure.mutation(async ({ ctx }) => {
-    const tenant = getTenant(ctx.session.user.corsairTenantId);
-    try {
-      // Always push the latest OAuth tokens from NextAuth's accounts table into
-      // Corsair's key manager. Access tokens expire in 1h; without this step,
-      // syncs silently return 0 once the token provisioned at sign-up goes stale.
-      if (ctx.session.user.corsairTenantId) {
-        try {
-          // provisionCorsairTenant re-encrypts both integration credentials
-          // (client_id/client_secret) AND account tokens on every sync, ensuring
-          // keyBuilder never fails due to stale plaintext or rotated DEKs.
-          await provisionCorsairTenant(
-            ctx.session.user.id,
-            ctx.session.user.corsairTenantId,
-            env.CORSAIR_KEK,
-          );
-        } catch (provisionErr) {
-          const msg = provisionErr instanceof Error ? provisionErr.message : String(provisionErr);
-          if (msg.includes("No Google OAuth credentials")) {
-            throw new TRPCError({
-              code: "UNAUTHORIZED",
-              message: "Google account connection is invalid. Please reconnect.",
-            });
-          }
-          throw provisionErr;
-        }
-      }
-
-      // Fetch recent message IDs from Gmail inbox
-      const listResult = await tenant.gmail.api.messages.list({
-        maxResults: 100,
-        labelIds: ["INBOX"],
+    const userId = ctx.session.user.id;
+    const gmailClient = await buildGmailClient(userId);
+    if (!gmailClient) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Google account not connected. Please reconnect.",
       });
-      const msgList = (listResult.messages ?? []) as { id?: string }[];
+    }
 
-      // Fetch each message. The SDK's messages.get auto-caches entity data
-      // (including subject/from/to extracted from headers) via the entity
-      // repository before returning. We don't do a separate upsert — that
-      // would overwrite the SDK's data with a partial copy that may be missing
-      // fields if header extraction fails.
+    try {
+      const listRes = await gmailClient.users.messages.list({
+        userId: "me",
+        maxResults: 100,
+        q: "in:inbox",
+      });
+      const msgList = listRes.data.messages ?? [];
+
+      // Warm the per-message Redis cache so the next searchEmails call is fast.
       let synced = 0;
-      for (const msg of msgList) {
-        if (!msg.id) continue;
-        try {
-          await tenant.gmail.api.messages.get({
-            id: msg.id,
-            format: "full",
-          });
-          synced++;
-        } catch (msgErr: unknown) {
-          // Re-throw auth errors so the outer catch handles them properly
-          const errCode = msgErr && typeof msgErr === "object" && "code" in msgErr
-            ? (msgErr as { code: number }).code : null;
-          if (errCode === 401 || errCode === 403) throw msgErr;
-          const errStatus = msgErr && typeof msgErr === "object" && "status" in msgErr
-            ? (msgErr as { status: number }).status : null;
-          if (errStatus === 401 || errStatus === 403) throw msgErr;
-          // Non-auth per-message failures: skip and continue
-        }
+      const CHUNK = 10;
+      for (let i = 0; i < msgList.length; i += CHUNK) {
+        const batch = msgList.slice(i, i + CHUNK).filter((m) => m.id);
+        const results = await Promise.all(
+          batch.map(async (msg) => {
+            const id = msg.id!;
+            const msgMetaKey = `gmail:msgmeta:v2:${userId}:${id}`;
+            if (await redis.get(msgMetaKey)) return true; // already cached
+            try {
+              const res = await gmailClient.users.messages.get({
+                userId: "me",
+                id,
+                format: "metadata",
+              });
+              const m = res.data;
+              const headers = (m.payload?.headers ?? []) as {
+                name?: string;
+                value?: string;
+              }[];
+              const rawDate = m.internalDate != null ? String(m.internalDate) : null;
+              const mapped: MappedMessage = {
+                id: m.id ?? id,
+                threadId: m.threadId ?? "",
+                snippet: m.snippet ?? "",
+                subject: getHeader(headers, "Subject"),
+                from: getHeader(headers, "From"),
+                to: getHeader(headers, "To"),
+                date: rawDate,
+                timestamp: messageTimestamp(rawDate ?? undefined),
+              };
+              if (mapped.from || mapped.subject || mapped.snippet) {
+                await redis.set(msgMetaKey, mapped, { ex: 300 });
+              }
+              return true;
+            } catch {
+              return false;
+            }
+          }),
+        );
+        synced += results.filter(Boolean).length;
       }
 
-      // Invalidate all cursor-keyed inbox pages for this user at once.
-      await bumpInboxVersion(ctx.session.user.id);
-
+      await bumpInboxVersion(userId);
       return { synced };
     } catch (error: unknown) {
-      // GmailAPIError uses `code` (not `status`)
-      if (error && typeof error === "object" && "code" in error) {
-        const code = (error as { code: number }).code;
-        if (code === 401 || code === 403) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
-        }
-      }
-      // Fallback for HTTP errors that expose `status`
-      if (error && typeof error === "object" && "status" in error) {
-        const status = (error as { status: number }).status;
-        if (status === 401 || status === 403) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
-        }
-      }
-      // Re-throw TRPC errors as-is (e.g. the hasOAuth check above)
       if (error instanceof TRPCError) throw error;
-      // Corsair keyBuilder auth failures, missing account/integration records, and
-      // DEK decryption failures (CORSAIR_KEK mismatch → "Invalid encrypted data format")
-      const msg = error instanceof Error ? error.message : String(error);
-      if (
-        msg.includes("[corsair:gmail]") ||
-        msg.includes("[auth-missing:") ||
-        msg.includes("refresh_token") ||
-        msg.includes("refresh token") ||
-        msg.includes("Account not found for tenant") ||
-        msg.includes("Invalid encrypted data format") ||
-        msg.includes("encrypted data") ||
-        msg.includes("unable to authenticate") ||
-        msg.includes("Unsupported state") ||
-        (msg.includes("Integration") && msg.includes("not found"))
-      ) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Google account connection is invalid. Please reconnect." });
-      }
-      // Transient/non-auth errors (rate limit, network, etc.) — log and return gracefully
       console.error("[refreshInbox] unexpected error:", error);
       return { synced: 0 };
     }

@@ -44,6 +44,8 @@ interface InboxListProps {
   clearSelection: () => void;
   LoaderIcon: React.FC;
   gmailAuthError?: boolean;
+  loadError?: boolean;
+  onRetry?: () => void;
   onReconnect?: () => void;
 }
 
@@ -68,6 +70,8 @@ export function InboxList({
   toggleEmailSelection,
   clearSelection,
   gmailAuthError,
+  loadError,
+  onRetry,
   onReconnect,
 }: InboxListProps) {
   const utils = api.useUtils();
@@ -130,7 +134,7 @@ export function InboxList({
           onLoadMoreRef.current();
         }
       },
-      { root, rootMargin: "200px", threshold: 0 }
+      { root, rootMargin: "800px", threshold: 0 }
     );
 
     observer.observe(sentinel);
@@ -271,6 +275,17 @@ export function InboxList({
               className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer"
             >
               Reconnect Google
+            </button>
+          </div>
+        ) : loadError && emails.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-3 px-6 text-center">
+            <WifiOff size={20} className="text-zinc-600" />
+            <span className="text-xs text-zinc-400">Couldn&apos;t load your inbox.</span>
+            <button
+              onClick={onRetry}
+              className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition cursor-pointer"
+            >
+              Retry
             </button>
           </div>
         ) : emails.length === 0 ? (

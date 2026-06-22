@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import { Mail, Loader2 } from "lucide-react";
@@ -63,12 +64,30 @@ export default function InboxPage() {
     isFetchingNextPage,
     isLoading: emailsLoading,
     isFetching,
+    isError: emailsIsError,
+    error: emailsError,
+    refetch: refetchEmails,
   } = api.gmail.searchEmails.useInfiniteQuery(queryInput, {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    retry: false,
+    // Keep the current list visible while a new tab/search/page loads instead of
+    // flashing an empty pane — switching feels instant.
+    placeholderData: keepPreviousData,
+    // Retry transient failures (rate limits, network) with backoff so a single
+    // Gmail hiccup never strands the user on an empty inbox. Don't retry auth
+    // errors — those need a reconnect, not a retry.
+    retry: (failureCount, err) =>
+      err.data?.code !== "UNAUTHORIZED" && failureCount < 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+
+  // Surface an expired/invalid Google connection as the reconnect prompt.
+  useEffect(() => {
+    if (emailsIsError && emailsError?.data?.code === "UNAUTHORIZED") {
+      setGmailAuthError(true);
+    }
+  }, [emailsIsError, emailsError]);
 
   const emails = data?.pages.flatMap((p) => p.items) ?? [];
   const hasMore = !!hasNextPage;
@@ -84,7 +103,12 @@ export default function InboxPage() {
 
   const { data: selectedMessage, isLoading: messageLoading } = api.gmail.getMessage.useQuery(
     { id: activeMessageId ?? "" },
-    { enabled: !!activeMessageId, retry: false }
+    {
+      enabled: !!activeMessageId,
+      retry: (failureCount, err) =>
+        err.data?.code !== "UNAUTHORIZED" && failureCount < 3,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    }
   );
 
   const { data: dailyBriefData } = api.ai.aiDailyBrief.useQuery(undefined, {
@@ -199,14 +223,10 @@ export default function InboxPage() {
     },
   });
 
-  // Auto-sync on first load when inbox is empty
-  const hasAutoSynced = useRef(false);
-  useEffect(() => {
-    if (!emailsLoading && emails.length === 0 && !hasAutoSynced.current) {
-      hasAutoSynced.current = true;
-      refreshInbox.mutate();
-    }
-  }, [emailsLoading, emails]); // eslint-disable-line react-hooks/exhaustive-deps
+  // No auto-sync on empty: searchEmails already live-lists from Gmail and
+  // hydrates with retries, so the list populates on its own. The old fallback
+  // fired a heavy full-inbox sync that competed for Gmail quota and delayed the
+  // first paint. The "Sync" button (now metadata-light) covers manual refresh.
 
   // Smart replies when message changes
   useEffect(() => {
@@ -308,6 +328,13 @@ export default function InboxPage() {
         clearSelection={clearSelection}
         LoaderIcon={LoaderIcon}
         gmailAuthError={gmailAuthError}
+        loadError={
+          emailsIsError && emailsError?.data?.code !== "UNAUTHORIZED"
+        }
+        onRetry={() => {
+          setGmailAuthError(false);
+          void refetchEmails();
+        }}
         onReconnect={() => signIn("google", { callbackUrl: "/dashboard" })}
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">

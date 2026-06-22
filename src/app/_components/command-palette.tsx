@@ -83,7 +83,7 @@ export function CommandPalette({ open, setOpen, onAction }: CommandPaletteProps)
               <X size={16} />
             </button>
           </div>
-          <Command.List className="max-h-[350px] overflow-y-auto p-2 custom-scrollbar">
+          <Command.List className="max-h-87.5 overflow-y-auto p-2 custom-scrollbar">
             <Command.Empty className="py-6 text-center text-sm text-zinc-500">
               No results found. Press <kbd className="px-1.5 py-0.5 bg-zinc-800 text-zinc-300 rounded text-xs">Enter</kbd> to search mail for &ldquo;{value}&rdquo;.
             </Command.Empty>

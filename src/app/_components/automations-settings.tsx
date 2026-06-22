@@ -362,7 +362,7 @@ export function AutomationsSettingsView() {
         {!runsList || runsList.length === 0 ? (
           <p className="text-xs text-zinc-500 italic">No automation executions recorded yet.</p>
         ) : (
-          <div className="space-y-3 max-h-[31.25rem] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-125 overflow-y-auto pr-1">
             {runsList.map((run) => (
               <div
                 key={run.id}

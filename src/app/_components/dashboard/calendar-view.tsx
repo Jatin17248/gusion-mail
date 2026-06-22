@@ -94,15 +94,71 @@ function formatWeekRangeLabel(weekRange: { start: string; end: string }) {
 }
 
 function getAttendeeSummary(attendees: string[]) {
-  if (attendees.length === 0) return "No guests";
+  if (attendees.length === 0) return null;
 
-  const names = attendees.slice(0, 2).map((attendee) => {
-    const { name, email } = parseEmailAddress(attendee);
-    return name || email || attendee;
-  });
+  const displayNames = attendees
+    .map((a) => parseEmailAddress(a).name)
+    .filter(Boolean);
 
-  if (attendees.length <= 2) return names.join(", ");
-  return `${names.join(", ")} +${attendees.length - 2}`;
+  if (displayNames.length > 0) {
+    const shown = displayNames.slice(0, 2).join(", ");
+    const extra = attendees.length - 2;
+    return extra > 0 ? `${shown} +${extra}` : shown;
+  }
+
+  return attendees.length === 1 ? "1 guest" : `${attendees.length} guests`;
+}
+
+const AVATAR_COLORS = [
+  "bg-sky-500/20 text-sky-300 border-sky-500/30",
+  "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  "bg-rose-500/20 text-rose-300 border-rose-500/30",
+];
+
+function getInitials(name: string, email: string) {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+  return email.slice(0, 2).toUpperCase();
+}
+
+function AttendeeAvatars({ attendees, max = 3 }: { attendees: string[]; max?: number }) {
+  if (attendees.length === 0) return null;
+
+  const parsed = attendees.map((a) => parseEmailAddress(a));
+  const shown = parsed.slice(0, max);
+  const overflow = attendees.length - max;
+
+  return (
+    <div className="flex items-center">
+      <div className="flex -space-x-1.5">
+        {shown.map((p, i) => (
+          <div
+            key={i}
+            title={p.name ? `${p.name} (${p.email})` : p.email}
+            className={cn(
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
+              AVATAR_COLORS[i % AVATAR_COLORS.length],
+            )}
+          >
+            {getInitials(p.name, p.email)}
+          </div>
+        ))}
+        {overflow > 0 && (
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-600 bg-zinc-800 text-[9px] font-bold text-zinc-400">
+            +{overflow}
+          </div>
+        )}
+      </div>
+      <span className="ml-1.5 text-[10px] text-zinc-500">
+        {attendees.length === 1 ? "1 invitee" : `${attendees.length} invitees`}
+      </span>
+    </div>
+  );
 }
 
 function getEventChipLabel(event: CalendarEvent, dayDate: Date) {
@@ -166,6 +222,12 @@ function buildWeekDays(weekRange: { start: string; end: string }, events: Calend
   });
 }
 
+function getCalendarWeekUrl(eventStart: string): string {
+  const date = parseCalendarDate(eventStart);
+  if (!date) return "https://calendar.google.com";
+  return `https://calendar.google.com/calendar/r/week/${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 function getUpcomingEvent(events: CalendarEvent[]) {
   const now = Date.now();
 
@@ -199,10 +261,10 @@ export function CalendarView({
   const isBusy = eventsFetching || refreshEvents.isPending;
 
   return (
-    <section className="relative flex-1 overflow-hidden bg-zinc-950">
+    <section className="relative flex flex-col flex-1 overflow-hidden bg-zinc-950">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.14),_transparent_28%)]" />
 
-      <div className="relative border-b border-white/6 bg-zinc-950/85 backdrop-blur-xl">
+      <div className="relative shrink-0 border-b border-white/6 bg-zinc-950/85 backdrop-blur-xl">
         <div className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -280,7 +342,7 @@ export function CalendarView({
 
             <button
               onClick={() => setCreateEventOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-950/30 transition hover:scale-[1.01] hover:from-sky-400 hover:to-indigo-400"
+              className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-sky-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-950/30 transition hover:scale-[1.01] hover:from-sky-400 hover:to-indigo-400"
             >
               <Plus size={14} />
               Create Event
@@ -292,7 +354,7 @@ export function CalendarView({
       <div className="relative flex-1 overflow-y-auto p-6">
         <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-4">
-            <div className="rounded-3xl border border-white/8 bg-gradient-to-br from-sky-500/18 via-zinc-950 to-emerald-500/12 p-5 shadow-[0_24px_80px_-36px_rgba(14,165,233,0.45)]">
+            <div className="rounded-3xl border border-white/8 bg-linear-to-br from-sky-500/18 via-zinc-950 to-emerald-500/12 p-5 shadow-[0_24px_80px_-36px_rgba(14,165,233,0.45)]">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200">
                 <Sparkles size={12} />
                 This Week
@@ -347,17 +409,15 @@ export function CalendarView({
                     <Users2 size={14} className="text-zinc-500" />
                     <span>{getAttendeeSummary(upcomingEvent.attendees)}</span>
                   </div>
-                  {upcomingEvent.htmlLink ? (
-                    <a
-                      href={upcomingEvent.htmlLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
-                    >
-                      Open in Google Calendar
-                      <ArrowUpRight size={14} />
-                    </a>
-                  ) : null}
+                  <a
+                    href={getCalendarWeekUrl(upcomingEvent.start)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-300 transition hover:text-sky-200"
+                  >
+                    Open in Google Calendar
+                    <ArrowUpRight size={14} />
+                  </a>
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/10 p-4 text-sm leading-6 text-zinc-400">
@@ -403,7 +463,7 @@ export function CalendarView({
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-7">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {weekDays.map((day) => (
                   <div
                     key={day.dayKey}
@@ -433,68 +493,61 @@ export function CalendarView({
                         day.events.map((event) => (
                           <article
                             key={`${day.dayKey}-${event.id}`}
-                            className="group rounded-2xl border border-white/10 bg-zinc-950/80 p-3 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.85)]"
+                            className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 p-3 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.85)]"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 text-[11px] font-medium text-sky-300">
-                                  <Clock3 size={12} />
-                                  <span>{getEventChipLabel(event, day.date)}</span>
-                                </div>
-                                <h4 className="mt-2 line-clamp-2 text-sm font-semibold text-zinc-50">
-                                  {event.summary || "Untitled event"}
-                                </h4>
-                              </div>
+                            {/* Time + actions in one row — no overlap */}
+                            <div className="mb-2 flex items-center gap-1">
+                              <Clock3 size={10} className="shrink-0 text-sky-400" />
+                              <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-sky-400">
+                                {getEventChipLabel(event, day.date)}
+                              </span>
+                              <a
+                                href={getCalendarWeekUrl(event.start)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 rounded p-1 text-zinc-500 transition hover:bg-white/8 hover:text-zinc-200"
+                                title="Open in Google Calendar"
+                              >
+                                <ArrowUpRight size={11} />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Delete "${event.summary}"? This cannot be undone.`)) {
+                                    deleteEvent.mutate({ id: event.id });
+                                  }
+                                }}
+                                className="shrink-0 rounded p-1 text-zinc-500 transition hover:bg-rose-500/10 hover:text-rose-300"
+                                title="Delete event"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
 
-                              <div className="flex items-center gap-1">
-                                {event.htmlLink ? (
-                                  <a
-                                    href={event.htmlLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-white/8 hover:text-zinc-100"
-                                    title="Open in Google Calendar"
-                                  >
-                                    <ArrowUpRight size={14} />
-                                  </a>
+                            {/* Title */}
+                            <h4 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-50">
+                              {event.summary || "Untitled event"}
+                            </h4>
+
+                            {/* Meta row */}
+                            {(event.location ?? (event.attendees.length > 0)) ? (
+                              <div className="mt-2.5 flex flex-col gap-1.5">
+                                {event.location ? (
+                                  <span className="flex min-w-0 items-center gap-1 text-[11px] text-zinc-400">
+                                    <MapPin size={11} className="shrink-0 text-zinc-500" />
+                                    <span className="truncate max-w-[90px]">{event.location}</span>
+                                  </span>
                                 ) : null}
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`Delete "${event.summary}"? This cannot be undone.`)) {
-                                      deleteEvent.mutate({ id: event.id });
-                                    }
-                                  }}
-                                  className="rounded-lg p-2 text-zinc-500 transition hover:bg-rose-500/10 hover:text-rose-300"
-                                  title="Delete event"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                {event.attendees.length > 0 ? (
+                                  <AttendeeAvatars attendees={event.attendees} />
+                                ) : null}
                               </div>
-                            </div>
-
-                            <div className="mt-3 space-y-2 text-[12px] text-zinc-400">
-                              {event.location ? (
-                                <div className="flex items-center gap-2">
-                                  <MapPin size={13} className="shrink-0 text-zinc-500" />
-                                  <span className="truncate">{event.location}</span>
-                                </div>
-                              ) : null}
-
-                              <div className="flex items-center gap-2">
-                                <Users2 size={13} className="shrink-0 text-zinc-500" />
-                                <span>{getAttendeeSummary(event.attendees)}</span>
-                              </div>
-                            </div>
+                            ) : null}
 
                             {event.description ? (
-                              <p className="mt-3 line-clamp-3 text-[12px] leading-5 text-zinc-500">
+                              <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-zinc-500">
                                 {event.description}
                               </p>
                             ) : null}
-
-                            <div className="mt-3 border-t border-white/8 pt-3 text-[11px] text-zinc-500">
-                              {formatEventWhen(event.start, event.end)}
-                            </div>
                           </article>
                         ))
                       ) : (

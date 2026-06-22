@@ -167,6 +167,77 @@ function SafeHtmlRenderer({ html }: { html: string }) {
   );
 }
 
+/** Render the small Markdown subset our AI summaries/briefs emit (headings,
+ * bold, italic, inline code, links, unordered lists). Styling is applied by the
+ * wrapper via arbitrary variants; output is sanitized with DOMPurify. */
+function renderMarkdownToHtml(md: string): string {
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const inline = (s: string) => {
+    let t = escapeHtml(s);
+    t = t.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+    );
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    t = t.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    return t;
+  };
+
+  const out: string[] = [];
+  let inList = false;
+  const closeList = () => {
+    if (inList) {
+      out.push("</ul>");
+      inList = false;
+    }
+  };
+
+  for (const rawLine of md.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+    const bullet = /^[*\-•]\s+(.*)$/.exec(line);
+    if (bullet) {
+      if (!inList) {
+        out.push("<ul>");
+        inList = true;
+      }
+      out.push(`<li>${inline(bullet[1] ?? "")}</li>`);
+      continue;
+    }
+    closeList();
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    if (heading) {
+      out.push(`<p><strong>${inline(heading[1] ?? "")}</strong></p>`);
+      continue;
+    }
+    out.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return out.join("");
+}
+
+function MarkdownText({ text, className }: { text: string; className?: string }) {
+  const html = DOMPurify.sanitize(renderMarkdownToHtml(text), {
+    ADD_ATTR: ["target", "rel"],
+    FORBID_TAGS: ["script", "style"],
+  });
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+// Shared markdown styling (arbitrary variants survive Tailwind purge here).
+const MARKDOWN_CLASS =
+  "[&_p]:my-1 [&_strong]:font-semibold [&_strong]:text-zinc-100 [&_em]:italic " +
+  "[&_a]:text-indigo-400 [&_a]:underline [&_a]:break-all " +
+  "[&_code]:bg-zinc-800 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[0.9em] " +
+  "[&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-0.5 [&_ul]:my-1 [&_li]:marker:text-zinc-600";
+
 const PREVIEWABLE = (mime: string) =>
   mime === "application/pdf" || mime.startsWith("image/");
 
@@ -397,9 +468,10 @@ export function ReadingPane({
               Your Daily Briefing
             </h3>
             {dailyBriefData?.brief ? (
-              <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap text-left font-medium">
-                {dailyBriefData.brief}
-              </p>
+              <MarkdownText
+                text={dailyBriefData.brief}
+                className={`text-xs text-zinc-400 leading-relaxed text-left font-medium ${MARKDOWN_CLASS}`}
+              />
             ) : (
               <p className="text-xs text-zinc-500 italic text-left">
                 Scanning your inbox for important updates...
@@ -603,14 +675,17 @@ export function ReadingPane({
                       <button
                         onClick={() => summarizeThread.mutate({ threadId: selectedMessage.threadId })}
                         disabled={summarizeThread.isPending}
-                        className="px-2.5 py-1 text-[10px] font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white rounded transition cursor-pointer disabled:opacity-50"
+                        className="px-2.5 py-1 text-[10px] font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-black dark:text-indigo-300 hover:text-white rounded transition cursor-pointer disabled:opacity-50"
                       >
                         {summarizeThread.isPending ? "Generating..." : "Generate Summary"}
                       </button>
                     )}
                   </div>
                   {threadSummary ? (
-                    <p className="text-xs text-zinc-300 leading-relaxed">{threadSummary}</p>
+                    <MarkdownText
+                      text={threadSummary}
+                      className={`text-xs text-zinc-300 leading-relaxed ${MARKDOWN_CLASS}`}
+                    />
                   ) : !summarizeThread.isPending ? (
                     <p className="text-[11px] text-zinc-500 italic">
                       Click above to generate a brief summary of this conversation.

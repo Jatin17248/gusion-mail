@@ -6,6 +6,7 @@ import { users, accounts, sessions, verificationTokens } from "@/server/db/schem
 import { eq, and } from "drizzle-orm";
 import { env } from "@/env";
 import { provisionCorsairTenant } from "@/server/lib/corsair-setup";
+import { refreshGoogleAccessToken } from "@/server/lib/google-token";
 
 declare module "next-auth" {
   interface Session {
@@ -17,6 +18,9 @@ declare module "next-auth" {
       isStaff?: boolean;
       suspendedAt?: string | null;
     } & DefaultSession["user"];
+    /** Set to "RefreshAccessTokenError" when the Google token refresh failed and
+     *  the user must re-authenticate. The UI reads this to prompt a reconnect. */
+    error?: "RefreshAccessTokenError";
   }
 }
 
@@ -71,7 +75,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      // On initial Google sign-in (and reconnect), the access/refresh tokens
+      // arrive on `account`. Stash them on the JWT so later calls can detect
+      // expiry and mint a fresh access token without a full re-auth.
+      if (account?.provider === "google") {
+        token.access_token = account.access_token;
+        // Google only returns refresh_token on first consent; keep the old one.
+        token.refresh_token =
+          account.refresh_token ?? (token.refresh_token as string | undefined);
+        token.expires_at = account.expires_at ?? undefined;
+        delete token.error;
+      }
+
       if (user) {
         // credentials authorize returns user, Google provider returns user on sign in
         const dbUser = user as typeof users.$inferSelect;
@@ -99,6 +115,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.suspendedAt = null;
         }
       }
+
+      // Refresh the Google access token once it has expired. NextAuth's
+      // DrizzleAdapter only writes the accounts row on the *initial* link, so
+      // without this the row (and the credentials provisionCorsairTenant pushes
+      // into Corsair) goes stale ~1h after sign-in. We compare in ms against the
+      // seconds-based expires_at and refresh slightly early to avoid handing out
+      // a token that expires mid-request.
+      const EXPIRY_SKEW_MS = 60_000;
+      const refreshToken = token.refresh_token as string | undefined;
+      const expiresAt = token.expires_at as number | undefined;
+      const userId = token.id as string | undefined;
+      if (
+        refreshToken &&
+        expiresAt &&
+        Date.now() >= expiresAt * 1000 - EXPIRY_SKEW_MS
+      ) {
+        try {
+          const refreshed = await refreshGoogleAccessToken(refreshToken);
+          token.access_token = refreshed.accessToken;
+          token.expires_at = refreshed.expiresAt;
+          if (refreshed.refreshToken) token.refresh_token = refreshed.refreshToken;
+          delete token.error;
+
+          // Persist the fresh token back into the accounts row so the Gmail read
+          // path (provisionCorsairTenant / refreshCorsairTokens) reads valid
+          // credentials instead of re-provisioning Corsair with a stale token.
+          if (userId) {
+            await db
+              .update(accounts)
+              .set({
+                access_token: refreshed.accessToken,
+                expires_at: refreshed.expiresAt,
+                ...(refreshed.refreshToken
+                  ? { refresh_token: refreshed.refreshToken }
+                  : {}),
+              })
+              .where(
+                and(
+                  eq(accounts.userId, userId),
+                  eq(accounts.provider, "google"),
+                ),
+              );
+          }
+        } catch (err) {
+          // Flag the token so the session exposes the error and the UI can
+          // prompt a reconnect. Keep the stale token rather than wiping it so a
+          // transient network blip doesn't force re-auth if it recovers.
+          console.error("[auth] Google access token refresh failed:", err);
+          token.error = "RefreshAccessTokenError";
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -109,6 +177,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.calendarConnected = token.calendarConnected as boolean | undefined;
         session.user.isStaff = token.isStaff as boolean | undefined;
         session.user.suspendedAt = token.suspendedAt as string | null | undefined;
+        session.error = token.error as "RefreshAccessTokenError" | undefined;
       }
       return session;
     },
