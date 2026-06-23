@@ -308,11 +308,11 @@ describe("Growth & Compliance Routers", () => {
     it("should retrieve emails filtered by tab", async () => {
       // Inbox paginates against the Gmail API (messages.list → cursor); each id is
       // hydrated via messages.get (which auto-caches the entity) and read back from
-      // the entity cache. The "important" tab maps to a Gmail `is:important` query.
+      // the entity cache. The "promotions" tab maps to a Gmail `category:promotions` query.
       const mockApiList = vi.fn().mockImplementation(({ q }: { q?: string }) =>
         Promise.resolve({
-          messages: q?.includes("is:important")
-            ? [{ id: "msg_imp_1" }]
+          messages: q?.includes("category:promotions")
+            ? [{ id: "msg_promo_1" }]
             : [{ id: "msg_all_1" }],
           nextPageToken: undefined,
         }),
@@ -324,7 +324,7 @@ describe("Growth & Compliance Routers", () => {
             entity_id: id,
             updated_at: new Date(),
             data: {
-              subject: id === "msg_imp_1" ? "Imp Subject" : "All Subject",
+              subject: id === "msg_promo_1" ? "Promo Subject" : "All Subject",
               from: "sender@example.com",
               internalDate: "1718361000000",
             },
@@ -347,9 +347,9 @@ describe("Growth & Compliance Routers", () => {
         },
       } as any);
 
-      // emailMeta join supplies the priority badge for msg_imp_1.
+      // emailMeta join supplies the priority badge for msg_promo_1.
       vi.mocked(db.query.emailMeta.findMany).mockResolvedValue([
-        { gmailMessageId: "msg_imp_1", priority: "high", category: "important" }
+        { gmailMessageId: "msg_promo_1", priority: "normal", category: "promotions" }
       ] as any);
 
       const caller = appRouter.createCaller(mockCtx as any);
@@ -360,11 +360,10 @@ describe("Growth & Compliance Routers", () => {
       expect(resAll.items[0]?.subject).toBe("All Subject");
       expect(resAll.nextCursor).toBeNull();
 
-      // Test tab: important
-      const resImp = await caller.gmail.searchEmails({ query: "", tab: "important" });
-      expect(resImp.items).toHaveLength(1);
-      expect(resImp.items[0]?.subject).toBe("Imp Subject");
-      expect(resImp.items[0]?.priority).toBe("high");
+      // Test tab: promotions
+      const resPromo = await caller.gmail.searchEmails({ query: "", tab: "promotions" });
+      expect(resPromo.items).toHaveLength(1);
+      expect(resPromo.items[0]?.subject).toBe("Promo Subject");
     });
   });
 });

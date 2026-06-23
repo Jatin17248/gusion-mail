@@ -121,7 +121,7 @@ export function MiniCalendarWidget({ onNavigateToCalendar }: MiniCalendarWidgetP
                   {Array.from({ length: Math.min(count, 3) }).map((_, dotIdx) => (
                     <div
                       key={dotIdx}
-                      className={`w-[3px] h-[3px] rounded-full ${
+                      className={`w-0.75 h-0.75 rounded-full ${
                         isToday ? "bg-white" : "bg-indigo-400"
                       }`}
                     />

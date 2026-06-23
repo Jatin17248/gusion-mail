@@ -319,7 +319,7 @@ function AttachmentChip({
       onClick={handleOpen}
       disabled={busy}
       title={attachment.filename}
-      className="group flex items-center gap-2.5 px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 hover:border-zinc-700 transition cursor-pointer max-w-[240px] disabled:opacity-60"
+      className="group flex items-center gap-2.5 px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 hover:border-zinc-700 transition cursor-pointer max-w-60 disabled:opacity-60"
     >
       <span className="shrink-0">
         {busy ? (

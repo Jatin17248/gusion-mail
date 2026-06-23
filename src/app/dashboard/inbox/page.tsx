@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { Mail, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { InboxList } from "@/app/_components/dashboard/inbox-list";
 import { ReadingPane } from "@/app/_components/dashboard/reading-pane";
 import { useDashboard } from "@/app/dashboard/_context/dashboard-context";
@@ -27,7 +27,7 @@ export default function InboxPage() {
 
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
-  const [inboxTab, setInboxTab] = useState<"important" | "other" | "vip" | "all">("all");
+  const [inboxTab, setInboxTab] = useState<"primary" | "promotions" | "social" | "updates">("primary");
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
   const [activeMessageId, setActiveMessageId] = useState<string | null>(initialMsg);
@@ -56,7 +56,7 @@ export default function InboxPage() {
 
   // Cursor-based infinite pagination against Gmail. The query input omits
   // `cursor` — tRPC injects it from getNextPageParam for each page.
-  const queryInput = { query: debouncedSearch, limit: PAGE_SIZE, tab: inboxTab };
+  const queryInput = { query: debouncedSearch, limit: PAGE_SIZE, tab: inboxTab as "primary" | "promotions" | "social" | "updates" | "all" };
   const {
     data,
     fetchNextPage,
@@ -336,9 +336,14 @@ export default function InboxPage() {
           void refetchEmails();
         }}
         onReconnect={() => signIn("google", { callbackUrl: "/dashboard" })}
+        wrapperClassName={
+          activeMessageId
+            ? "w-80 lg:w-96 shrink-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden"
+            : undefined
+        }
       />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {activeMessageId ? (
+      {activeMessageId && (
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <ReadingPane
             messageLoading={messageLoading}
             selectedMessage={selectedMessage}
@@ -357,14 +362,8 @@ export default function InboxPage() {
             replyToEmail={replyToEmail}
             LoaderIcon={LoaderIcon}
           />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <Mail size={32} className="text-zinc-600 mb-3" />
-            <p className="text-sm font-medium text-zinc-400">Select an email to read</p>
-            <p className="text-xs text-zinc-500 mt-1">Click any message from the list on the left</p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

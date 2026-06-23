@@ -62,6 +62,30 @@ interface MappedMessage {
   to: string;
   date: string | null;
   timestamp: number;
+  gmailLabelIds: string[];
+}
+
+// Gmail system label IDs for inbox category tabs.
+// Using labelIds in messages.list is more reliable than text-search queries for
+// categories because it targets the labels Gmail assigns directly — no search
+// engine involvement, no ranking differences across account types.
+const TAB_LABEL_IDS: Record<string, string[]> = {
+  // "INBOX" constrains to messages currently in the inbox (not archived).
+  // CATEGORY_PERSONAL is the Gmail system label for the Primary tab.
+  primary: ["INBOX", "CATEGORY_PERSONAL"],
+  promotions: ["INBOX", "CATEGORY_PROMOTIONS"],
+  social: ["INBOX", "CATEGORY_SOCIAL"],
+  updates: ["INBOX", "CATEGORY_UPDATES"],
+  all: ["INBOX"],
+};
+
+// Derive our canonical category name from Gmail's system label IDs.
+function categoryFromLabelIds(labelIds: string[]): string {
+  if (labelIds.includes("CATEGORY_PROMOTIONS")) return "promotions";
+  if (labelIds.includes("CATEGORY_SOCIAL")) return "social";
+  if (labelIds.includes("CATEGORY_UPDATES")) return "updates";
+  if (labelIds.includes("CATEGORY_FORUMS")) return "updates";
+  return "primary";
 }
 
 interface MessageDetails {
@@ -192,6 +216,7 @@ async function fetchEmailMetadata(
             userId: "me",
             id,
             format: "metadata",
+            metadataHeaders: ["Subject", "From", "To", "Date"],
           });
           const msg = res.data;
           const headers = (msg.payload?.headers ?? []) as {
@@ -209,6 +234,7 @@ async function fetchEmailMetadata(
             to: getHeader(headers, "To"),
             date: rawDate,
             timestamp: messageTimestamp(rawDate ?? undefined),
+            gmailLabelIds: (msg.labelIds ?? []) as string[],
           };
           if (mapped.from || mapped.subject || mapped.snippet) {
             await redis.set(msgMetaKey, mapped, { ex: 300 });
@@ -233,17 +259,12 @@ async function fetchEmailMetadata(
   };
 }
 
-// Build a Gmail search query for a tab + optional user search string.
-function buildInboxQuery(
-  tab: "important" | "other" | "vip" | "all",
-  query: string,
-): string {
-  const parts: string[] = ["in:inbox"];
+// Build an optional freetext search query. Category filtering is handled via
+// labelIds in messages.list — which is more reliable than embedding category
+// in the q string (direct label match vs. text search heuristics).
+function buildUserSearchQuery(query: string): string | undefined {
   const q = query.trim();
-  if (q) parts.push(q);
-  if (tab === "important") parts.push("(is:important OR is:starred)");
-  else if (tab === "other") parts.push("-is:important -is:starred");
-  return parts.join(" ");
+  return q || undefined;
 }
 
 export const gmailRouter = createTRPCRouter({
@@ -251,7 +272,7 @@ export const gmailRouter = createTRPCRouter({
     .input(
       z.object({
         query: z.string().default(""),
-        tab: z.enum(["important", "other", "vip", "all"]).optional().default("all"),
+        tab: z.enum(["primary", "promotions", "social", "updates", "all"]).optional().default("primary"),
         limit: z.number().min(1).max(100).default(25),
         cursor: z.string().optional(),
       }),
@@ -285,44 +306,31 @@ export const gmailRouter = createTRPCRouter({
       let fetchFailed = 0;
 
       try {
-        if (input.tab === "vip") {
-          // VIP is a small, user-curated set — query emailMeta directly and
-          // return a single page (no Gmail cursor).
-          const vipMetas = await db.query.emailMeta.findMany({
-            where: and(
-              eq(emailMeta.userId, userId),
-              eq(emailMeta.isVipSender, true),
-            ),
-            limit: input.limit,
-          });
-          const fetched = await fetchEmailMetadata(
-            gmailClient,
-            userId,
-            vipMetas.map((m) => m.gmailMessageId),
-          );
-          rows = fetched.rows;
-          fetchFailed = fetched.failed;
-        } else {
-          const listRes = await gmailClient.users.messages.list({
-            userId: "me",
-            maxResults: input.limit,
-            q: buildInboxQuery(input.tab, input.query),
-            pageToken: input.cursor,
-          });
-          const ids = (listRes.data.messages ?? [])
-            .map((m) => m.id)
-            .filter((id): id is string => !!id);
-          const fetched = await fetchEmailMetadata(gmailClient, userId, ids);
-          rows = fetched.rows;
-          fetchFailed = fetched.failed;
-          nextCursor = listRes.data.nextPageToken ?? null;
-        }
+        // Use labelIds for category filtering — direct label match is more
+        // reliable than embedding "category:X" in the q string, which goes
+        // through Gmail's search engine and can behave differently across
+        // account types (Workspace vs. personal) and category-disabled accounts.
+        const labelIds = TAB_LABEL_IDS[input.tab] ?? ["INBOX"];
+        const listRes = await gmailClient.users.messages.list({
+          userId: "me",
+          maxResults: input.limit,
+          labelIds,
+          q: buildUserSearchQuery(input.query),
+          pageToken: input.cursor,
+        });
+        const ids = (listRes.data.messages ?? [])
+          .map((m) => m.id)
+          .filter((id): id is string => !!id);
+        const fetched = await fetchEmailMetadata(gmailClient, userId, ids);
+        rows = fetched.rows;
+        fetchFailed = fetched.failed;
+        nextCursor = listRes.data.nextPageToken ?? null;
       } catch (err) {
         console.error("[searchEmails] Gmail error:", err);
         throw toInboxError(err);
       }
 
-      // Join emailMeta for priority/category badges + snooze/VIP flags.
+      // Join emailMeta for priority / snooze flags.
       const returnedIds = rows.map((m) => m.id);
       const metas =
         returnedIds.length > 0
@@ -337,16 +345,14 @@ export const gmailRouter = createTRPCRouter({
 
       const items: InboxRow[] = rows
         .filter((m) => metaMap.get(m.id)?.isSnoozed !== true)
-        // "other" excludes VIP senders (Gmail q already handled important/starred).
-        .filter((m) =>
-          input.tab === "other" ? metaMap.get(m.id)?.isVipSender !== true : true,
-        )
         .map((m) => {
           const meta = metaMap.get(m.id);
           return {
             ...m,
             priority: meta?.priority ?? "normal",
-            category: meta?.category ?? "other",
+            // Derive category from Gmail's actual label IDs on the message,
+            // falling back to our local emailMeta record if present.
+            category: meta?.category ?? categoryFromLabelIds(m.gmailLabelIds),
           };
         });
 
@@ -522,11 +528,12 @@ export const gmailRouter = createTRPCRouter({
       const listRes = await gmailClient.users.messages.list({
         userId: "me",
         maxResults: 100,
-        q: "in:inbox",
+        labelIds: ["INBOX"],
       });
       const msgList = listRes.data.messages ?? [];
 
-      // Warm the per-message Redis cache so the next searchEmails call is fast.
+      // Warm the per-message Redis cache AND upsert category labels into
+      // emailMeta so the local DB reflects Gmail's category assignments.
       let synced = 0;
       const CHUNK = 10;
       for (let i = 0; i < msgList.length; i += CHUNK) {
@@ -535,36 +542,73 @@ export const gmailRouter = createTRPCRouter({
           batch.map(async (msg) => {
             const id = msg.id!;
             const msgMetaKey = `gmail:msgmeta:v2:${userId}:${id}`;
-            if (await redis.get(msgMetaKey)) return true; // already cached
-            try {
-              const res = await gmailClient.users.messages.get({
-                userId: "me",
-                id,
-                format: "metadata",
-              });
-              const m = res.data;
-              const headers = (m.payload?.headers ?? []) as {
-                name?: string;
-                value?: string;
-              }[];
-              const rawDate = m.internalDate != null ? String(m.internalDate) : null;
-              const mapped: MappedMessage = {
-                id: m.id ?? id,
-                threadId: m.threadId ?? "",
-                snippet: m.snippet ?? "",
-                subject: getHeader(headers, "Subject"),
-                from: getHeader(headers, "From"),
-                to: getHeader(headers, "To"),
-                date: rawDate,
-                timestamp: messageTimestamp(rawDate ?? undefined),
-              };
-              if (mapped.from || mapped.subject || mapped.snippet) {
-                await redis.set(msgMetaKey, mapped, { ex: 300 });
+            const alreadyCached = await redis.get(msgMetaKey) as MappedMessage | null;
+
+            let mapped: MappedMessage | null = alreadyCached;
+            if (!mapped) {
+              try {
+                const res = await gmailClient.users.messages.get({
+                  userId: "me",
+                  id,
+                  format: "metadata",
+                  metadataHeaders: ["Subject", "From", "To", "Date"],
+                });
+                const m = res.data;
+                const headers = (m.payload?.headers ?? []) as {
+                  name?: string;
+                  value?: string;
+                }[];
+                const rawDate = m.internalDate != null ? String(m.internalDate) : null;
+                mapped = {
+                  id: m.id ?? id,
+                  threadId: m.threadId ?? "",
+                  snippet: m.snippet ?? "",
+                  subject: getHeader(headers, "Subject"),
+                  from: getHeader(headers, "From"),
+                  to: getHeader(headers, "To"),
+                  date: rawDate,
+                  timestamp: messageTimestamp(rawDate ?? undefined),
+                  gmailLabelIds: (m.labelIds ?? []) as string[],
+                };
+                if (mapped.from || mapped.subject || mapped.snippet) {
+                  await redis.set(msgMetaKey, mapped, { ex: 300 });
+                }
+              } catch {
+                return false;
               }
-              return true;
-            } catch {
-              return false;
             }
+
+            // Upsert category into emailMeta from Gmail's label IDs.
+            if (mapped) {
+              const category = categoryFromLabelIds(mapped.gmailLabelIds);
+              try {
+                const existing = await db.query.emailMeta.findFirst({
+                  where: and(
+                    eq(emailMeta.userId, userId),
+                    eq(emailMeta.gmailMessageId, id),
+                  ),
+                });
+                if (existing) {
+                  if (existing.category !== category) {
+                    await db
+                      .update(emailMeta)
+                      .set({ category, updatedAt: new Date() })
+                      .where(eq(emailMeta.id, existing.id));
+                  }
+                } else {
+                  await db.insert(emailMeta).values({
+                    userId,
+                    gmailMessageId: id,
+                    threadId: mapped.threadId,
+                    category,
+                  });
+                }
+              } catch {
+                // emailMeta write is best-effort; don't fail the sync
+              }
+            }
+
+            return true;
           }),
         );
         synced += results.filter(Boolean).length;

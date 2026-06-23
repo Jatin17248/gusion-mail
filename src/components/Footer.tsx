@@ -11,7 +11,7 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
       <footer className={cn("border-t-[3px] border-[#fff2e0] py-4 relative overflow-hidden bg-[#fff2e0]", className)}>
         <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-[#e61f2a] via-indigo-50 to-[#e61f2a]" />
         
-        <section className="relative px-4 max-w-[1280px] mx-auto text-gray-500 grid md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_27%] gap-10 py-10 text-sm">
+        <section className="relative px-4 max-w-7xl mx-auto text-gray-500 grid md:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_27%] gap-10 py-10 text-sm">
 
           {/* COLUMN 1: Integrations & Features */}
           <div>
@@ -175,12 +175,12 @@ const Footer = ({ className }: React.ComponentProps<"footer">) => {
         </section>
 
         {/* Footer Bottom */}
-        <section className="relative px-4 max-w-[1080px] md:text-center text-gray-300 text-sm flex items-center justify-center gap-2 mx-auto mt-8 pb-2">
+        <section className="relative px-4 max-w-270 md:text-center text-gray-300 text-sm flex items-center justify-center gap-2 mx-auto mt-8 pb-2">
           <div>© {new Date().getFullYear()} Gusion Mail. All rights reserved.</div>
         </section>
 
-        <section className="relative px-4 max-w-[1080px] text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 pointer-events-none font-bold -mb-[11%] sm:-mb-[7%]">
-          <div className="relative w-full max-w-[1000px] aspect-[1000/300] opacity-80 drop-shadow-xl animate-[pulse_4s_infinite] select-none">
+        <section className="relative px-4 max-w-270 text-center text-gray-100 flex items-center justify-center gap-2 mx-auto pb-2 pointer-events-none font-bold -mb-[11%] sm:-mb-[7%]">
+          <div className="relative w-full max-w-250 aspect-1000/300 opacity-80 drop-shadow-xl animate-[pulse_4s_infinite] select-none">
             <Image
               src="/images/logoFooter.svg"
               alt="Gusion Mail Footer"

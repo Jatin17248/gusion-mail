@@ -82,7 +82,7 @@ function CalendarPageInner() {
     return Math.round((targetSunday.getTime() - nowSunday.getTime()) / (7 * 24 * 60 * 60 * 1000));
   }, [searchParams]);
 
-  const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
+  const [monthOffset, setMonthOffset] = useState(initialWeekOffset);
   const [createEventOpen, setCreateEventOpen] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
   const [eventDesc, setEventDesc] = useState("");
@@ -96,14 +96,18 @@ function CalendarPageInner() {
   const [eventErrors, setEventErrors] = useState<EventFormErrors>({});
 
   const weekRange = useMemo(() => {
-    const start = new Date();
-    start.setDate(start.getDate() - start.getDay() + weekOffset * 7);
+    const today = new Date();
+    const displayDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    // Start at the Sunday on or before the 1st of the month
+    const startDow = displayDate.getDay();
+    const start = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1 - startDow);
     start.setHours(0, 0, 0, 0);
+    // Cover 6 full weeks (42 days)
     const end = new Date(start);
-    end.setDate(end.getDate() + 7);
+    end.setDate(start.getDate() + 41);
     end.setHours(23, 59, 59, 999);
     return { start: start.toISOString(), end: end.toISOString() };
-  }, [weekOffset]);
+  }, [monthOffset]);
 
   const { data: events, isLoading: eventsLoading, isFetching: eventsFetching, error: eventsError } =
     api.calendar.searchEvents.useQuery(
@@ -160,12 +164,12 @@ function CalendarPageInner() {
     onError: (err) => toast.error(err.message || "Failed to delete event."),
   });
 
-  const syncedCalendarWeeks = useRef(new Set<string>());
+  const syncedCalendarMonths = useRef(new Set<string>());
 
   useEffect(() => {
-    const weekKey = `${weekRange.start}:${weekRange.end}`;
-    if (syncedCalendarWeeks.current.has(weekKey)) return;
-    syncedCalendarWeeks.current.add(weekKey);
+    const monthKey = `${weekRange.start}:${weekRange.end}`;
+    if (syncedCalendarMonths.current.has(monthKey)) return;
+    syncedCalendarMonths.current.add(monthKey);
     refreshEvents.mutate({ weekStart: weekRange.start, weekEnd: weekRange.end });
   }, [weekRange.start, weekRange.end]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -229,10 +233,9 @@ function CalendarPageInner() {
   return (
     <>
       <CalendarView
-        weekOffset={weekOffset}
-        setWeekOffset={setWeekOffset}
+        monthOffset={monthOffset}
+        setMonthOffset={setMonthOffset}
         refreshEvents={refreshEvents}
-        weekRange={weekRange}
         setCreateEventOpen={setCreateEventOpen}
         eventsLoading={eventsLoading}
         eventsFetching={eventsFetching}
